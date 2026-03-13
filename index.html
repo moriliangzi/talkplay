@@ -242,7 +242,7 @@
 <div id="sidebar">
   <button class="global-btn" onclick="openModal('api-modal')">後台 API 設定</button>
   <button class="global-btn" onclick="openModal('worldbook-modal')">世界書管理</button>
-  <button class="global-btn" onclick="openModal('backup-modal')">紀錄備份與匯入</button>
+  <button class="global-btn" onclick="openModal('backup-modal')">全機備份與還原</button>
   
   <div class="chat-list-header">
     <span>我的對話清單</span>
@@ -314,15 +314,15 @@
 </div>
 
 <div class="modal" id="backup-modal">
-  <h3 style="margin-top:0;">當前對話紀錄管理</h3>
+  <h3 style="margin-top:0;">全機備份與還原</h3>
   <div class="setting-item">
-    <label>匯出當前紀錄</label>
-    <button onclick="exportChatHistory()" style="padding:10px; background:#e6e6fa; border:none; border-radius:8px; cursor:pointer; color:#555;">下載為 JSON 檔案</button>
+    <label style="color:#666;">完整匯出（包含所有聊天室紀錄、人設、API設定與世界書）</label>
+    <button onclick="exportFullBackup()" style="padding:10px; background:#e6e6fa; border:none; border-radius:8px; cursor:pointer; color:#555; font-weight:bold;">下載全機備份檔 (.json)</button>
   </div>
-  <div class="setting-item">
-    <label>匯入紀錄 (注意：會覆蓋當前畫面上的對話)</label>
-    <input type="file" id="import-chat-file" accept=".json" onchange="importChatHistory(event)" style="display:none;">
-    <button onclick="document.getElementById('import-chat-file').click()" style="padding:10px; background:#f4f4f4; border:1px solid #ddd; border-radius:8px; cursor:pointer; color:#555;">選擇 JSON 檔案灌入</button>
+  <div class="setting-item" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px;">
+    <label style="color:#c0392b;">全機還原 (注意：會完全覆蓋目前的全部資料！)</label>
+    <input type="file" id="import-backup-file" accept=".json" onchange="importFullBackup(event)" style="display:none;">
+    <button onclick="document.getElementById('import-backup-file').click()" style="padding:10px; background:#ffe4e1; border:1px solid #ffcccb; border-radius:8px; cursor:pointer; color:#c0392b; font-weight:bold;">選擇備份檔還原</button>
   </div>
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
@@ -387,9 +387,10 @@
 
   let worldbooks = JSON.parse(localStorage.getItem('myWorldbooks')) || [];
   let apiSettings = JSON.parse(localStorage.getItem('myApiSettings')) || { url: '', key: '', model: 'gpt-3.5-turbo' };
-  let currentChatId = chats[0].id;
+  let currentChatId = chats[0] ? chats[0].id : Date.now();
 
   function init() {
+    if (chats.length === 0) createNewChat(); // 確保至少有一個對話
     renderChatList();
     renderWorldbookList();
     loadChat(currentChatId);
@@ -457,6 +458,7 @@
   function loadChat(id) {
     currentChatId = id;
     const chat = chats.find(c => c.id === id);
+    if(!chat) return;
     if(!chat.messages) chat.messages = [];
     
     document.getElementById('current-chat-title').innerText = chat.title;
@@ -482,6 +484,7 @@
 
   function renderAllMessages() {
     const chat = chats.find(c => c.id === currentChatId);
+    if(!chat) return;
     const msgContainer = document.getElementById('messages');
     msgContainer.innerHTML = '';
     
@@ -631,19 +634,22 @@
 
   async function callOpenAI_API() {
     const chat = chats.find(c => c.id === currentChatId);
-    let systemContent = "";
+    
+    // 強化 System Prompt 指令，確保模型優先遵循設定
+    let systemContent = "請扮演指定的角色，並嚴格遵循以下的世界觀與人設進行對話。\n\n";
     
     if (chat.worldbookIds && chat.worldbookIds.length > 0) {
+      systemContent += "【🌍 重要世界觀與絕對規則】（請在回覆時嚴格代入此背景）：\n";
       chat.worldbookIds.forEach(id => {
         const wb = worldbooks.find(w => w.id === id);
-        if (wb) systemContent += `【世界觀與背景設定 - ${wb.name}】\n${wb.content}\n\n`;
+        if (wb) systemContent += `[${wb.name}]\n${wb.content}\n\n`;
       });
     }
-    if (chat.charPrompt) systemContent += `【你的角色設定】\n${chat.charPrompt}\n\n`;
-    if (chat.userPrompt) systemContent += `【我的角色設定】\n${chat.userPrompt}\n\n`;
+    if (chat.charPrompt) systemContent += `【🎭 你的角色設定】（請嚴格維持此性格與說話語氣）：\n${chat.charPrompt}\n\n`;
+    if (chat.userPrompt) systemContent += `【👤 我的設定】（你對話的對象）：\n${chat.userPrompt}\n\n`;
 
     const apiMessages = [];
-    if (systemContent) {
+    if (systemContent.trim()) {
       apiMessages.push({ role: "system", content: systemContent.trim() });
     }
     
@@ -749,41 +755,68 @@
     closeAllModals();
   }
 
-  // ==== 修正：使用 Blob 下載檔案 ====
-  function exportChatHistory() {
-    const chat = chats.find(c => c.id === currentChatId);
-    const jsonStr = JSON.stringify(chat.messages, null, 2);
+  // ==== 全機備份與匯入邏輯 ====
+  function exportFullBackup() {
+    const exportData = {
+      appName: "EPhone_Roleplay_Backup",
+      version: 1,
+      apiSettings: apiSettings,
+      worldbooks: worldbooks,
+      chats: chats
+    };
     
-    // 將資料轉為 Blob，手機端才容易觸發原生檔案管理
+    const jsonStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     
     const dlAnchorElem = document.createElement('a');
     dlAnchorElem.href = url;
-    dlAnchorElem.download = `${chat.title}_紀錄.json`;
+    
+    // 產生帶有日期的備份檔名
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    dlAnchorElem.download = `EPhone_全機備份_${dateStr}.json`;
+    
     document.body.appendChild(dlAnchorElem);
     dlAnchorElem.click();
-    
     document.body.removeChild(dlAnchorElem);
     URL.revokeObjectURL(url);
   }
 
-  function importChatHistory(event) {
+  function importFullBackup(event) {
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = function(e) {
       try {
-        const importedMessages = JSON.parse(e.target.result);
-        if (Array.isArray(importedMessages)) {
-          const chat = chats.find(c => c.id === currentChatId);
-          chat.messages = importedMessages;
-          saveData();
-          renderAllMessages();
-          alert("紀錄已經成功灌進去囉。");
-          closeAllModals();
+        const importedData = JSON.parse(e.target.result);
+        
+        // 判斷是否為新的全機備份格式
+        if (importedData.appName === "EPhone_Roleplay_Backup") {
+          if(confirm("偵測到全機備份檔！這將會覆蓋您目前的所有對話、設定與世界書，確定要繼續還原嗎？")) {
+            chats = importedData.chats || [];
+            worldbooks = importedData.worldbooks || [];
+            apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
+            currentChatId = chats[0] ? chats[0].id : Date.now();
+            
+            saveData();
+            init(); // 重新初始化整個網頁
+            alert("全機備份已經成功還原囉。");
+            closeAllModals();
+          }
+        } 
+        // 兼容舊版的單一對話紀錄匯入
+        else if (Array.isArray(importedData)) {
+          if(confirm("偵測到舊版單一對話紀錄。這會覆蓋當前畫面上這個聊天室的訊息，確定繼續嗎？")) {
+            const chat = chats.find(c => c.id === currentChatId);
+            chat.messages = importedData;
+            saveData();
+            renderAllMessages();
+            alert("單一紀錄已經成功灌進去囉。");
+            closeAllModals();
+          }
         } else {
-          alert("檔案格式好像不太對喔。");
+          alert("檔案格式好像不太對喔，請確認這是 EPhone 匯出的 JSON 檔。");
         }
       } catch (err) {
         alert("讀取檔案失敗了。");
@@ -878,6 +911,7 @@
 
   function saveChatSettings() {
     const chat = chats.find(c => c.id === currentChatId);
+    if(!chat) return;
     chat.title = document.getElementById('chat-name-input').value || chat.title;
     
     const limitInput = parseInt(document.getElementById('context-limit-input').value);
