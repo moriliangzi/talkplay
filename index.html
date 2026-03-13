@@ -278,7 +278,7 @@
     <input type="text" id="api-url" placeholder="例如：https://api.openai.com">
   </div>
   <div class="setting-item">
-    <label>密鑰 (Key)</label>
+    <label>密鑰 (Key) <span style="font-size:11px; color:#aaa; font-weight:normal; margin-left:5px;">支援多組輪詢，請用英文逗號隔開</span></label>
     <input type="password" id="api-key" placeholder="填入 API Key">
   </div>
   <div class="setting-item">
@@ -320,7 +320,7 @@
     <button onclick="exportFullBackup()" style="padding:10px; background:#e6e6fa; border:none; border-radius:8px; cursor:pointer; color:#555; font-weight:bold;">下載全機備份檔 (.json)</button>
   </div>
   <div class="setting-item" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px;">
-    <label style="color:#c0392b;">全機還原 (注意：會完全覆蓋目前的全部資料！)</label>
+    <label style="color:#c0392b;">全機還原 (支援匯入 EPhone 舊版備份！)</label>
     <input type="file" id="import-backup-file" accept=".json" onchange="importFullBackup(event)" style="display:none;">
     <button onclick="document.getElementById('import-backup-file').click()" style="padding:10px; background:#ffe4e1; border:1px solid #ffcccb; border-radius:8px; cursor:pointer; color:#c0392b; font-weight:bold;">選擇備份檔還原</button>
   </div>
@@ -390,7 +390,7 @@
   let currentChatId = chats[0] ? chats[0].id : Date.now();
 
   function init() {
-    if (chats.length === 0) createNewChat(); // 確保至少有一個對話
+    if (chats.length === 0) createNewChat(); 
     renderChatList();
     renderWorldbookList();
     loadChat(currentChatId);
@@ -588,8 +588,12 @@
 
   async function fetchModels() {
     let url = document.getElementById('api-url').value.trim();
-    const key = document.getElementById('api-key').value.trim();
-    if (!url || !key) return alert("請先填寫 API 網址與密鑰");
+    const keyString = document.getElementById('api-key').value.trim();
+    if (!url || !keyString) return alert("請先填寫 API 網址與密鑰");
+    
+    // 支援多 Key 輪詢
+    const keys = keyString.split(',').map(k => k.trim()).filter(k => k);
+    const randomKey = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : '';
 
     if (url.endsWith('/v1/chat/completions')) url = url.replace('/v1/chat/completions', '');
     if (url.endsWith('/v1')) url = url.replace('/v1', '');
@@ -606,7 +610,7 @@
         const response = await fetch(`${url}/v1/models`, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${key}`
+                'Authorization': `Bearer ${randomKey}`
             }
         });
 
@@ -635,7 +639,6 @@
   async function callOpenAI_API() {
     const chat = chats.find(c => c.id === currentChatId);
     
-    // 強化 System Prompt 指令，確保模型優先遵循設定
     let systemContent = "請扮演指定的角色，並嚴格遵循以下的世界觀與人設進行對話。\n\n";
     
     if (chat.worldbookIds && chat.worldbookIds.length > 0) {
@@ -671,13 +674,16 @@
             fetchUrl += '/v1/chat/completions';
         }
     }
+    
+    const keys = apiSettings.key.split(',').map(k => k.trim()).filter(k => k);
+    const randomKey = keys.length > 0 ? keys[Math.floor(Math.random() * keys.length)] : '';
 
     try {
       const response = await fetch(fetchUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiSettings.key}`
+          'Authorization': `Bearer ${randomKey}`
         },
         body: JSON.stringify({
           model: apiSettings.model || "gpt-3.5-turbo",
@@ -691,7 +697,7 @@
       
     } catch (error) {
       console.error(error);
-      return `（連線出了點狀況：${error.message}，請檢查 API 網址是否正確，或確認反代伺服器狀態。）`;
+      return `（連線出了點狀況：${error.message}，請檢查 API 網址或密鑰是否正確。）`;
     }
   }
 
@@ -755,7 +761,7 @@
     closeAllModals();
   }
 
-  // ==== 全機備份與匯入邏輯 ====
+  // ==== 全機備份與匯入邏輯 (含 EPhone 格式轉換) ====
   function exportFullBackup() {
     const exportData = {
       appName: "EPhone_Roleplay_Backup",
@@ -772,10 +778,9 @@
     const dlAnchorElem = document.createElement('a');
     dlAnchorElem.href = url;
     
-    // 產生帶有日期的備份檔名
     const d = new Date();
     const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-    dlAnchorElem.download = `EPhone_全機備份_${dateStr}.json`;
+    dlAnchorElem.download = `EPhone_極簡版備份_${dateStr}.json`;
     
     document.body.appendChild(dlAnchorElem);
     dlAnchorElem.click();
@@ -791,32 +796,82 @@
       try {
         const importedData = JSON.parse(e.target.result);
         
-        // 判斷是否為新的全機備份格式
+        // 1. 我們極簡版的備份格式
         if (importedData.appName === "EPhone_Roleplay_Backup") {
-          if(confirm("偵測到全機備份檔！這將會覆蓋您目前的所有對話、設定與世界書，確定要繼續還原嗎？")) {
+          if(confirm("偵測到極簡版備份檔！這將會覆蓋目前的全部資料，確定要還原嗎？")) {
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
             currentChatId = chats[0] ? chats[0].id : Date.now();
             
             saveData();
-            init(); // 重新初始化整個網頁
-            alert("全機備份已經成功還原囉。");
+            init(); 
+            alert("極簡版備份已經成功還原囉。");
             closeAllModals();
           }
         } 
-        // 兼容舊版的單一對話紀錄匯入
+        // 2. 舊版/完整版 EPhone 的備份格式自動轉換
+        else if (importedData.chats && !Array.isArray(importedData.chats)) {
+          if(confirm("偵測到 EPhone 完整版的備份檔！要幫你把聊天室、人設和歷史紀錄自動抽取出來並轉換到這裡嗎？")) {
+             let newChats = [];
+             Object.values(importedData.chats).forEach(oldChat => {
+                 let mappedMessages = [];
+                 if (oldChat.history) {
+                     oldChat.history.forEach(m => {
+                         if(m.isHidden) return; // 忽略不必要的隱藏系統提示
+                         let text = m.content;
+                         // 將 EPhone 的特殊卡片轉換為文字標記
+                         if (m.type === 'voice_message') text = "【發送了一則語音訊息】";
+                         if (m.type === 'ai_image') text = "【發送了一張圖片】";
+                         if (m.type === 'transfer') text = "【發起了轉帳】";
+                         
+                         mappedMessages.push({
+                             sender: m.role === 'user' ? 'user' : 'ai',
+                             content: text || ''
+                         });
+                     });
+                 }
+                 newChats.push({
+                     id: oldChat.id || Date.now(),
+                     title: oldChat.name || "匯入的對話",
+                     worldbookIds: [],
+                     userPrompt: oldChat.settings?.myPersona || "",
+                     charPrompt: oldChat.settings?.aiPersona || "",
+                     aiAvatar: oldChat.avatar || null,
+                     contextLimit: 30,
+                     messages: mappedMessages
+                 });
+             });
+             
+             if (newChats.length > 0) {
+                 chats = newChats;
+             }
+             
+             // 搬運 API 設定
+             if (importedData.apiSettings) {
+                 apiSettings.url = importedData.apiSettings.proxyUrl || apiSettings.url;
+                 apiSettings.key = importedData.apiSettings.apiKey || apiSettings.key;
+                 apiSettings.model = importedData.apiSettings.model || apiSettings.model;
+             }
+             
+             currentChatId = chats[0] ? chats[0].id : Date.now();
+             saveData();
+             init();
+             alert("完整版 EPhone 紀錄已經成功過濾並轉換進來囉。");
+             closeAllModals();
+          }
+        }
         else if (Array.isArray(importedData)) {
-          if(confirm("偵測到舊版單一對話紀錄。這會覆蓋當前畫面上這個聊天室的訊息，確定繼續嗎？")) {
+          if(confirm("偵測到單一對話紀錄。這會覆蓋當前畫面上這個聊天室的訊息，確定繼續嗎？")) {
             const chat = chats.find(c => c.id === currentChatId);
             chat.messages = importedData;
             saveData();
             renderAllMessages();
-            alert("單一紀錄已經成功灌進去囉。");
+            alert("單一對話紀錄已經成功灌進去囉。");
             closeAllModals();
           }
         } else {
-          alert("檔案格式好像不太對喔，請確認這是 EPhone 匯出的 JSON 檔。");
+          alert("檔案格式好像不太對喔，請確認檔案來源。");
         }
       } catch (err) {
         alert("讀取檔案失敗了。");
@@ -892,6 +947,7 @@
     const list = document.getElementById('wb-checkbox-list');
     list.innerHTML = '';
     const chat = chats.find(c => c.id === currentChatId);
+    if(!chat) return;
     
     if (worldbooks.length === 0) {
       list.innerHTML = '<span style="color:#aaa; font-size:13px;">尚未建立世界書</span>';
