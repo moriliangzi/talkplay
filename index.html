@@ -130,18 +130,17 @@
     border-radius: 18px;
     line-height: 1.5;
     letter-spacing: 0.5px;
-    word-break: break-all;
+    word-wrap: break-word; /* 優化斷行 */
+    white-space: pre-wrap; /* 讓換行符號正常顯示 */
     cursor: pointer; 
     user-select: none;
   }
   .msg.user {
-    /* 預設樣式，會被內聯樣式覆蓋 */
     background: #e6e6fa;
     color: #333;
     border-bottom-right-radius: 4px;
   }
   .msg.ai {
-    /* 預設樣式，會被內聯樣式覆蓋 */
     background: #f9f9f9;
     border: 1px solid #eee;
     color: #333;
@@ -405,7 +404,6 @@
     if (!c.worldbookIds) c.worldbookIds = [];
     if (c.contextLimit === undefined) c.contextLimit = 30;
     
-    // 初始化顏色預設值防呆
     if (!c.userBgColor) c.userBgColor = '#e6e6fa';
     if (!c.userTextColor) c.userTextColor = '#333333';
     if (!c.aiBgColor) c.aiBgColor = '#f9f9f9';
@@ -495,7 +493,6 @@
     document.getElementById('user-prompt').value = chat.userPrompt || '';
     document.getElementById('char-prompt').value = chat.charPrompt || '';
     
-    // 載入顏色設定
     document.getElementById('user-bg-color').value = chat.userBgColor || '#e6e6fa';
     document.getElementById('user-text-color').value = chat.userTextColor || '#333333';
     document.getElementById('ai-bg-color').value = chat.aiBgColor || '#f9f9f9';
@@ -526,7 +523,6 @@
     const customAvatarHtml = `<img src="${chat.aiAvatar}" class="ai-avatar">`;
     const finalAvatarHtml = chat.aiAvatar ? customAvatarHtml : defaultAvatarHtml;
     
-    // 取出顏色設定
     const userBg = chat.userBgColor || '#e6e6fa';
     const userColor = chat.userTextColor || '#333333';
     const aiBg = chat.aiBgColor || '#f9f9f9';
@@ -542,7 +538,6 @@
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ${m.sender}`;
         
-        // 套用專屬顏色
         if (m.sender === 'user') {
           msgDiv.style.background = userBg;
           msgDiv.style.color = userColor;
@@ -802,7 +797,6 @@
     closeAllModals();
   }
 
-  // ==== 全機備份與匯入邏輯 ====
   function exportFullBackup() {
     const exportData = {
       appName: "EPhone_Roleplay_Backup",
@@ -967,7 +961,6 @@
     chat.userPrompt = document.getElementById('user-prompt').value;
     chat.charPrompt = document.getElementById('char-prompt').value;
     
-    // 儲存顏色設定
     chat.userBgColor = document.getElementById('user-bg-color').value;
     chat.userTextColor = document.getElementById('user-text-color').value;
     chat.aiBgColor = document.getElementById('ai-bg-color').value;
