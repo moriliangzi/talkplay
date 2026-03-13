@@ -216,7 +216,7 @@
   }
   .setting-item { margin-bottom: 15px; display: flex; flex-direction: column; }
   .setting-item label { font-size: 13px; color: #888; margin-bottom: 5px; }
-  .setting-item input[type="text"], .setting-item input[type="password"], .setting-item textarea, .setting-item select {
+  .setting-item input[type="text"], .setting-item input[type="password"], .setting-item input[type="number"], .setting-item textarea, .setting-item select {
     padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; outline: none; box-sizing: border-box;
   }
   .close-btn {
@@ -242,6 +242,7 @@
 <div id="sidebar">
   <button class="global-btn" onclick="openModal('api-modal')">後台 API 設定</button>
   <button class="global-btn" onclick="openModal('worldbook-modal')">世界書管理</button>
+  <button class="global-btn" onclick="openModal('backup-modal')">紀錄備份與匯入</button>
   
   <div class="chat-list-header">
     <span>我的對話清單</span>
@@ -273,7 +274,7 @@
 <div class="modal" id="api-modal">
   <h3 style="margin-top:0;">API 設定</h3>
   <div class="setting-item">
-    <label>反代地址 URL (不需要添加 /v1 結尾噢~)</label>
+    <label>反代地址 URL</label>
     <input type="text" id="api-url" placeholder="例如：https://api.openai.com">
   </div>
   <div class="setting-item">
@@ -312,11 +313,29 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
+<div class="modal" id="backup-modal">
+  <h3 style="margin-top:0;">當前對話紀錄管理</h3>
+  <div class="setting-item">
+    <label>匯出當前紀錄</label>
+    <button onclick="exportChatHistory()" style="padding:10px; background:#e6e6fa; border:none; border-radius:8px; cursor:pointer; color:#555;">下載為 JSON 檔案</button>
+  </div>
+  <div class="setting-item">
+    <label>匯入紀錄 (注意：會覆蓋當前畫面上的對話)</label>
+    <input type="file" id="import-chat-file" accept=".json" onchange="importChatHistory(event)" style="display:none;">
+    <button onclick="document.getElementById('import-chat-file').click()" style="padding:10px; background:#f4f4f4; border:1px solid #ddd; border-radius:8px; cursor:pointer; color:#555;">選擇 JSON 檔案灌入</button>
+  </div>
+  <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
+</div>
+
 <div class="modal" id="chat-settings-modal">
   <h3 style="margin-top:0;">當前對話設定</h3>
   <div class="setting-item">
     <label>更改對話名稱</label>
     <input type="text" id="chat-name-input" placeholder="輸入新的對話名稱">
+  </div>
+  <div class="setting-item">
+    <label>記憶訊息條數 (設定 AI 記得的最近幾句話)</label>
+    <input type="number" id="context-limit-input" placeholder="例如：30" min="1" max="200">
   </div>
   <div class="setting-item">
     <label>連接世界書 (可多選)</label>
@@ -354,7 +373,7 @@
 
 <script>
   let chats = JSON.parse(localStorage.getItem('myChats')) || [
-    { id: Date.now(), title: '與夏準的日常', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, messages: [] }
+    { id: Date.now(), title: '與夏準的日常', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [] }
   ];
   
   chats.forEach(c => {
@@ -363,6 +382,7 @@
       delete c.worldbookId;
     }
     if (!c.worldbookIds) c.worldbookIds = [];
+    if (c.contextLimit === undefined) c.contextLimit = 30; // 相容舊資料
   });
 
   let worldbooks = JSON.parse(localStorage.getItem('myWorldbooks')) || [];
@@ -416,7 +436,7 @@
 
   function createNewChat() {
     const newChat = {
-      id: Date.now(), title: '新開的劇情線', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, messages: []
+      id: Date.now(), title: '新開的劇情線', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: []
     };
     chats.push(newChat);
     saveData();
@@ -441,6 +461,7 @@
     
     document.getElementById('current-chat-title').innerText = chat.title;
     document.getElementById('chat-name-input').value = chat.title;
+    document.getElementById('context-limit-input').value = chat.contextLimit || 30;
     document.getElementById('user-prompt').value = chat.userPrompt || '';
     document.getElementById('char-prompt').value = chat.charPrompt || '';
     
@@ -562,18 +583,16 @@
     renderAllMessages();
   }
 
-  // ==== API 模型拉取邏輯 ====
   async function fetchModels() {
     let url = document.getElementById('api-url').value.trim();
     const key = document.getElementById('api-key').value.trim();
     if (!url || !key) return alert("請先填寫 API 網址與密鑰");
 
-    // 智能處理使用者輸入的結尾，確保抓取 /v1/models 路徑正確
     if (url.endsWith('/v1/chat/completions')) url = url.replace('/v1/chat/completions', '');
     if (url.endsWith('/v1')) url = url.replace('/v1', '');
     if (url.endsWith('/')) url = url.slice(0, -1);
 
-    document.getElementById('api-url').value = url; // 幫用戶格式化顯示回去
+    document.getElementById('api-url').value = url; 
 
     const btn = document.getElementById('fetch-models-btn');
     const originalText = btn.innerText;
@@ -599,7 +618,7 @@
             });
             alert('模型拉取成功！請點擊模型輸入框下拉選擇。');
         } else {
-            alert('獲取失敗：回傳格式不符合 OpenAI 標準，請手動輸入模型名稱。');
+            alert('獲取失敗：回傳格式不符合標準，請手動輸入模型名稱。');
         }
     } catch (error) {
         console.error(error);
@@ -610,7 +629,6 @@
     }
   }
 
-  // ==== 發送聊天邏輯 ====
   async function callOpenAI_API() {
     const chat = chats.find(c => c.id === currentChatId);
     let systemContent = "";
@@ -629,12 +647,15 @@
       apiMessages.push({ role: "system", content: systemContent.trim() });
     }
     
-    chat.messages.forEach(m => {
+    // 根據記憶條數設定擷取對話
+    const limit = parseInt(chat.contextLimit) || 30;
+    const recentMessages = chat.messages.slice(-limit);
+
+    recentMessages.forEach(m => {
       let cleanText = m.content.replace(/<img[^>]*>/g, "[傳送了一張圖片]");
       apiMessages.push({ role: m.sender === 'user' ? "user" : "assistant", content: cleanText });
     });
 
-    // 智能處理發送對話的 URL 拼接
     let fetchUrl = apiSettings.url.trim();
     if (fetchUrl.endsWith('/')) fetchUrl = fetchUrl.slice(0, -1);
     
@@ -729,6 +750,41 @@
     closeAllModals();
   }
 
+  // ==== 備份與匯入邏輯 ====
+  function exportChatHistory() {
+    const chat = chats.find(c => c.id === currentChatId);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(chat.messages, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", `${chat.title}_紀錄.json`);
+    dlAnchorElem.click();
+  }
+
+  function importChatHistory(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const importedMessages = JSON.parse(e.target.result);
+        if (Array.isArray(importedMessages)) {
+          const chat = chats.find(c => c.id === currentChatId);
+          chat.messages = importedMessages;
+          saveData();
+          renderAllMessages();
+          alert("紀錄已經成功灌進去囉。");
+          closeAllModals();
+        } else {
+          alert("檔案格式好像不太對喔。");
+        }
+      } catch (err) {
+        alert("讀取檔案失敗了。");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  }
+
   function saveWorldbook() {
     const idInput = document.getElementById('editing-wb-id').value;
     const name = document.getElementById('wb-name').value.trim();
@@ -816,6 +872,9 @@
     const chat = chats.find(c => c.id === currentChatId);
     chat.title = document.getElementById('chat-name-input').value || chat.title;
     
+    const limitInput = parseInt(document.getElementById('context-limit-input').value);
+    chat.contextLimit = isNaN(limitInput) ? 30 : limitInput;
+
     const selectedWbs = Array.from(document.querySelectorAll('.wb-checkbox:checked')).map(cb => cb.value);
     chat.worldbookIds = selectedWbs;
     
