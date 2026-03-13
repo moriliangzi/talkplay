@@ -382,7 +382,7 @@
       delete c.worldbookId;
     }
     if (!c.worldbookIds) c.worldbookIds = [];
-    if (c.contextLimit === undefined) c.contextLimit = 30; // 相容舊資料
+    if (c.contextLimit === undefined) c.contextLimit = 30;
   });
 
   let worldbooks = JSON.parse(localStorage.getItem('myWorldbooks')) || [];
@@ -647,7 +647,6 @@
       apiMessages.push({ role: "system", content: systemContent.trim() });
     }
     
-    // 根據記憶條數設定擷取對話
     const limit = parseInt(chat.contextLimit) || 30;
     const recentMessages = chat.messages.slice(-limit);
 
@@ -750,14 +749,23 @@
     closeAllModals();
   }
 
-  // ==== 備份與匯入邏輯 ====
+  // ==== 修正：使用 Blob 下載檔案 ====
   function exportChatHistory() {
     const chat = chats.find(c => c.id === currentChatId);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(chat.messages, null, 2));
+    const jsonStr = JSON.stringify(chat.messages, null, 2);
+    
+    // 將資料轉為 Blob，手機端才容易觸發原生檔案管理
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    
     const dlAnchorElem = document.createElement('a');
-    dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", `${chat.title}_紀錄.json`);
+    dlAnchorElem.href = url;
+    dlAnchorElem.download = `${chat.title}_紀錄.json`;
+    document.body.appendChild(dlAnchorElem);
     dlAnchorElem.click();
+    
+    document.body.removeChild(dlAnchorElem);
+    URL.revokeObjectURL(url);
   }
 
   function importChatHistory(event) {
