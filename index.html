@@ -135,11 +135,13 @@
     user-select: none;
   }
   .msg.user {
+    /* 預設樣式，會被內聯樣式覆蓋 */
     background: #e6e6fa;
     color: #333;
     border-bottom-right-radius: 4px;
   }
   .msg.ai {
+    /* 預設樣式，會被內聯樣式覆蓋 */
     background: #f9f9f9;
     border: 1px solid #eee;
     color: #333;
@@ -317,7 +319,7 @@
   <h3 style="margin-top:0;">全機備份與還原</h3>
   <div class="setting-item">
     <label style="color:#666;">完整匯出（包含所有聊天室紀錄、人設、API設定與世界書）</label>
-    <button onclick="exportFullBackup()" style="padding:10px; background:#e6e6fa; border:none; border-radius:8px; cursor:pointer; color:#555; font-weight:bold;">下載專屬備份檔 (.json)</button>
+    <button onclick="exportFullBackup()" style="padding:10px; background:#e6e6fa; border:none; border-radius:8px; cursor:pointer; color:#555; font-weight:bold;">下載全機備份檔 (.json)</button>
   </div>
   <div class="setting-item" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px;">
     <label style="color:#c0392b;">全機還原 (注意：會完全覆蓋目前的全部資料！)</label>
@@ -332,6 +334,21 @@
   <div class="setting-item">
     <label>更改對話名稱</label>
     <input type="text" id="chat-name-input" placeholder="輸入新的對話名稱">
+  </div>
+  <div class="setting-item">
+    <label>對話框顏色設定</label>
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+      <span style="font-size:12px; color:#666; width:60px;">我的背景</span>
+      <input type="color" id="user-bg-color" value="#e6e6fa" style="padding:0; width:30px; height:30px; border:none; border-radius:4px; cursor:pointer;">
+      <span style="font-size:12px; color:#666; width:60px; margin-left:10px;">我的文字</span>
+      <input type="color" id="user-text-color" value="#333333" style="padding:0; width:30px; height:30px; border:none; border-radius:4px; cursor:pointer;">
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <span style="font-size:12px; color:#666; width:60px;">對方背景</span>
+      <input type="color" id="ai-bg-color" value="#f9f9f9" style="padding:0; width:30px; height:30px; border:none; border-radius:4px; cursor:pointer;">
+      <span style="font-size:12px; color:#666; width:60px; margin-left:10px;">對方文字</span>
+      <input type="color" id="ai-text-color" value="#333333" style="padding:0; width:30px; height:30px; border:none; border-radius:4px; cursor:pointer;">
+    </div>
   </div>
   <div class="setting-item">
     <label>記憶訊息條數 (設定 AI 記得的最近幾句話)</label>
@@ -373,7 +390,11 @@
 
 <script>
   let chats = JSON.parse(localStorage.getItem('myChats')) || [
-    { id: Date.now(), title: '與夏準的日常', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [] }
+    { 
+      id: Date.now(), title: '與夏準的日常', worldbookIds: [], 
+      userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
+      userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
+    }
   ];
   
   chats.forEach(c => {
@@ -383,6 +404,12 @@
     }
     if (!c.worldbookIds) c.worldbookIds = [];
     if (c.contextLimit === undefined) c.contextLimit = 30;
+    
+    // 初始化顏色預設值防呆
+    if (!c.userBgColor) c.userBgColor = '#e6e6fa';
+    if (!c.userTextColor) c.userTextColor = '#333333';
+    if (!c.aiBgColor) c.aiBgColor = '#f9f9f9';
+    if (!c.aiTextColor) c.aiTextColor = '#333333';
   });
 
   let worldbooks = JSON.parse(localStorage.getItem('myWorldbooks')) || [];
@@ -437,7 +464,8 @@
 
   function createNewChat() {
     const newChat = {
-      id: Date.now(), title: '新開的劇情線', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: []
+      id: Date.now(), title: '新開的劇情線', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
+      userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
     };
     chats.push(newChat);
     saveData();
@@ -467,6 +495,12 @@
     document.getElementById('user-prompt').value = chat.userPrompt || '';
     document.getElementById('char-prompt').value = chat.charPrompt || '';
     
+    // 載入顏色設定
+    document.getElementById('user-bg-color').value = chat.userBgColor || '#e6e6fa';
+    document.getElementById('user-text-color').value = chat.userTextColor || '#333333';
+    document.getElementById('ai-bg-color').value = chat.aiBgColor || '#f9f9f9';
+    document.getElementById('ai-text-color').value = chat.aiTextColor || '#333333';
+    
     renderWorldbookCheckboxes();
     
     const avatarPreview = document.getElementById('ai-avatar-preview');
@@ -492,8 +526,14 @@
     const customAvatarHtml = `<img src="${chat.aiAvatar}" class="ai-avatar">`;
     const finalAvatarHtml = chat.aiAvatar ? customAvatarHtml : defaultAvatarHtml;
     
+    // 取出顏色設定
+    const userBg = chat.userBgColor || '#e6e6fa';
+    const userColor = chat.userTextColor || '#333333';
+    const aiBg = chat.aiBgColor || '#f9f9f9';
+    const aiColor = chat.aiTextColor || '#333333';
+    
     if (chat.messages.length === 0) {
-      msgContainer.innerHTML = `<div class="msg ai" style="align-self: flex-start; max-width: 80%;">${finalAvatarHtml}<div>進入對話：${chat.title}。</div></div>`;
+      msgContainer.innerHTML = `<div class="msg ai" style="align-self: flex-start; max-width: 80%; background:${aiBg}; color:${aiColor};">${finalAvatarHtml}<div>進入對話：${chat.title}。</div></div>`;
     } else {
       chat.messages.forEach((m, index) => {
         const wrapper = document.createElement('div');
@@ -501,9 +541,15 @@
         
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ${m.sender}`;
+        
+        // 套用專屬顏色
         if (m.sender === 'user') {
+          msgDiv.style.background = userBg;
+          msgDiv.style.color = userColor;
           msgDiv.innerHTML = m.content;
         } else {
+          msgDiv.style.background = aiBg;
+          msgDiv.style.color = aiColor;
           msgDiv.innerHTML = `${finalAvatarHtml}<div style="flex:1;">${m.content}</div>`;
         }
 
@@ -569,8 +615,11 @@
     const chat = chats.find(c => c.id === currentChatId);
     const finalAvatarHtml = chat.aiAvatar ? `<img src="${chat.aiAvatar}" class="ai-avatar">` : `<div class="ai-avatar"></div>`;
 
+    const aiBg = chat.aiBgColor || '#f9f9f9';
+    const aiColor = chat.aiTextColor || '#333333';
+
     msgDiv.innerHTML += `
-      <div class="msg ai" id="${loadingId}" style="align-self: flex-start;">
+      <div class="msg ai" id="${loadingId}" style="align-self: flex-start; background:${aiBg}; color:${aiColor};">
         ${finalAvatarHtml}
         <div style="color:#aaa; font-style:italic;">正在輸入...</div>
       </div>`;
@@ -634,7 +683,6 @@
 
   async function callOpenAI_API() {
     const chat = chats.find(c => c.id === currentChatId);
-    
     let systemContent = "請扮演指定的角色，並嚴格遵循以下的世界觀與人設進行對話。\n\n";
     
     if (chat.worldbookIds && chat.worldbookIds.length > 0) {
@@ -754,9 +802,10 @@
     closeAllModals();
   }
 
+  // ==== 全機備份與匯入邏輯 ====
   function exportFullBackup() {
     const exportData = {
-      appName: "Nana_Roleplay_Backup",
+      appName: "EPhone_Roleplay_Backup",
       version: 1,
       apiSettings: apiSettings,
       worldbooks: worldbooks,
@@ -772,7 +821,7 @@
     
     const d = new Date();
     const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-    dlAnchorElem.download = `娜娜專屬聊天室_備份_${dateStr}.json`;
+    dlAnchorElem.download = `EPhone_全機備份_${dateStr}.json`;
     
     document.body.appendChild(dlAnchorElem);
     dlAnchorElem.click();
@@ -788,8 +837,8 @@
       try {
         const importedData = JSON.parse(e.target.result);
         
-        if (importedData.appName === "Nana_Roleplay_Backup") {
-          if(confirm("偵測到專屬備份檔！這將會覆蓋目前所有的對話、設定與世界書，確定要繼續還原嗎？")) {
+        if (importedData.appName === "EPhone_Roleplay_Backup") {
+          if(confirm("偵測到全機備份檔！這將會覆蓋您目前的所有對話、設定與世界書，確定要繼續還原嗎？")) {
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
@@ -797,20 +846,21 @@
             
             saveData();
             init(); 
-            alert("備份已經成功還原囉。");
+            alert("全機備份已經成功還原囉。");
             closeAllModals();
           }
-        } else if (Array.isArray(importedData)) {
-          if(confirm("偵測到單一對話紀錄。這會覆蓋當前畫面上這個聊天室的訊息，確定繼續嗎？")) {
+        } 
+        else if (Array.isArray(importedData)) {
+          if(confirm("偵測到舊版單一對話紀錄。這會覆蓋當前畫面上這個聊天室的訊息，確定繼續嗎？")) {
             const chat = chats.find(c => c.id === currentChatId);
             chat.messages = importedData;
             saveData();
             renderAllMessages();
-            alert("紀錄已經成功灌進去囉。");
+            alert("單一紀錄已經成功灌進去囉。");
             closeAllModals();
           }
         } else {
-          alert("檔案格式好像不太對喔，這不是我們專屬的備份檔。");
+          alert("檔案格式好像不太對喔，請確認這是 EPhone 匯出的 JSON 檔。");
         }
       } catch (err) {
         alert("讀取檔案失敗了。");
@@ -916,6 +966,12 @@
     
     chat.userPrompt = document.getElementById('user-prompt').value;
     chat.charPrompt = document.getElementById('char-prompt').value;
+    
+    // 儲存顏色設定
+    chat.userBgColor = document.getElementById('user-bg-color').value;
+    chat.userTextColor = document.getElementById('user-text-color').value;
+    chat.aiBgColor = document.getElementById('ai-bg-color').value;
+    chat.aiTextColor = document.getElementById('ai-text-color').value;
     
     const avatarPreview = document.getElementById('ai-avatar-preview');
     if(avatarPreview.src && avatarPreview.style.display !== 'none') {
