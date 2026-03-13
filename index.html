@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>專屬聊天室</title>
+<style>
+  body {
+    font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    display: flex;
+    height: 100vh;
+    margin: 0;
+    background-color: #fcfcfc;
+    color: #4a4a4a;
+  }
+  
+  #sidebar {
+    width: 260px;
+    background: #f7f7f7;
+    padding: 20px;
+    border-right: 1px solid #eaeaea;
+    display: flex;
+    flex-direction: column;
+  }
+  .global-btn {
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 10px;
+    color: #555;
+    font-size: 14px;
+    transition: 0.2s;
+  }
+  .global-btn:hover { background: #f0f0f0; }
+  
+  .chat-list-header {
+    margin-top: 20px;
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .add-chat-btn {
+    background: none;
+    border: none;
+    color: #d8bfd8;
+    cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  
+  #chat-list-container {
+    flex: 1;
+    overflow-y: auto;
+    user-select: none;
+  }
+  .chat-item {
+    padding: 12px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    margin-bottom: 8px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    font-size: 14px;
+    transition: 0.1s;
+  }
+  .chat-item.active {
+    border-left-color: #d8bfd8;
+    background: #fafafa;
+  }
+
+  #chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    position: relative;
+  }
+  
+  #chat-header {
+    padding: 15px 30px;
+    border-bottom: 1px solid #eaeaea;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+  }
+  .chat-title { font-size: 16px; font-weight: bold; color: #333; }
+  .chat-settings-btn {
+    padding: 8px 15px;
+    background: #f4f4f4;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    color: #666;
+    font-size: 13px;
+  }
+  .chat-settings-btn:hover { background: #e8e8e8; }
+
+  #messages {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .msg-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 80%;
+  }
+  .msg-wrapper.user-wrapper {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+  .msg-wrapper.ai-wrapper {
+    align-self: flex-start;
+  }
+
+  .msg {
+    padding: 12px 18px;
+    border-radius: 18px;
+    line-height: 1.5;
+    letter-spacing: 0.5px;
+    word-break: break-all;
+    cursor: pointer; 
+    user-select: none;
+  }
+  .msg.user {
+    background: #e6e6fa;
+    color: #333;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.ai {
+    background: #f9f9f9;
+    border: 1px solid #eee;
+    color: #333;
+    border-bottom-left-radius: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .ai-avatar {
+    width: 35px; height: 35px; border-radius: 50%;
+    background: #d8bfd8; object-fit: cover; flex-shrink: 0;
+  }
+
+  .del-btn {
+    opacity: 0;
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 5px;
+    transition: 0.2s;
+  }
+  .msg-wrapper:hover .del-btn {
+    opacity: 1;
+  }
+  .del-btn:hover {
+    color: #e74c3c;
+  }
+
+  #input-area {
+    padding: 20px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    gap: 10px;
+    background: #fff;
+    align-items: center;
+  }
+  .upload-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #f4f4f4; border: none; cursor: pointer;
+    display: flex; justify-content: center; align-items: center;
+    color: #888; font-size: 18px; flex-shrink: 0;
+  }
+  input[type="text"].chat-input {
+    flex: 1; padding: 12px 15px; border: 1px solid #ddd;
+    border-radius: 20px; outline: none; font-size: 15px; background: #fafafa;
+  }
+  
+  #true-send-btn {
+    width: 38px; height: 38px; border-radius: 50%; 
+    background: #f0f0f0; border: none;
+    cursor: pointer; color: #666; font-size: 12px; font-weight: bold;
+    display: flex; justify-content: center; align-items: center;
+    transition: 0.2s; flex-shrink: 0;
+  }
+  #true-send-btn:hover { background: #e4e4e4; color: #333; }
+
+  #fake-send-btn {
+    padding: 10px 25px; background: #d8bfd8; border: none;
+    border-radius: 20px; cursor: pointer; color: #fff; font-size: 15px;
+    transition: 0.2s; white-space: nowrap; flex-shrink: 0;
+  }
+  #fake-send-btn:hover { background: #cbaacb; }
+
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(2px); z-index: 5;
+  }
+  .modal {
+    display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: white; padding: 30px; border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05); width: 450px; max-height: 80vh; overflow-y: auto; z-index: 10; border: 1px solid #eee;
+  }
+  .setting-item { margin-bottom: 15px; display: flex; flex-direction: column; }
+  .setting-item label { font-size: 13px; color: #888; margin-bottom: 5px; }
+  .setting-item input[type="text"], .setting-item input[type="password"], .setting-item textarea, .setting-item select {
+    padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; outline: none; box-sizing: border-box;
+  }
+  .close-btn {
+    width: 100%; padding: 12px; margin-top: 10px;
+    background: #f0f0f0; border: none; border-radius: 8px; cursor: pointer; color: #555; font-size: 14px;
+  }
+  
+  #wb-list { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
+  .wb-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #eee;
+  }
+  .wb-item-title { font-size: 14px; color: #333; }
+  .wb-item-btns button {
+    padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px;
+  }
+  .btn-edit { background: #e6e6fa; color: #555; }
+  .btn-delete { background: #ffe4e1; color: #c0392b; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <button class="global-btn" onclick="openModal('api-modal')">後台 API 設定</button>
+  <button class="global-btn" onclick="openModal('worldbook-modal')">世界書管理</button>
+  
+  <div class="chat-list-header">
+    <span>我的對話清單</span>
+    <button class="add-chat-btn" title="新增對話" onclick="createNewChat()">+</button>
+  </div>
+  
+  <div id="chat-list-container"></div>
+</div>
+
+<div id="chat-area">
+  <div id="chat-header">
+    <div class="chat-title" id="current-chat-title">載入中...</div>
+    <button class="chat-settings-btn" onclick="openModal('chat-settings-modal')">當前對話設定</button>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="input-area">
+    <input type="file" id="image-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+    <button class="upload-btn" onclick="document.getElementById('image-upload').click()">+</button>
+    <input type="text" id="user-input" class="chat-input" placeholder="說點什麼或傳送圖片..." onkeypress="handleKeyPress(event)" autocomplete="off">
+    <button id="true-send-btn" onclick="sendTrueMessage()" title="呼叫回覆">呼叫</button>
+    <button id="fake-send-btn" onclick="sendFakeMessage()">發送</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
+
+<div class="modal" id="api-modal">
+  <h3 style="margin-top:0;">API 設定</h3>
+  <div class="setting-item">
+    <label>反代地址 URL (不需要添加 /v1 結尾噢~)</label>
+    <input type="text" id="api-url" placeholder="例如：https://api.openai.com">
+  </div>
+  <div class="setting-item">
+    <label>密鑰 (Key)</label>
+    <input type="password" id="api-key" placeholder="填入 API Key">
+  </div>
+  <div class="setting-item">
+    <label>模型 (Model)</label>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="api-model" list="model-list" placeholder="手動輸入或拉取模型" style="flex: 1;">
+      <button id="fetch-models-btn" onclick="fetchModels()" style="padding: 0 15px; background: #e6e6fa; border: none; border-radius: 8px; cursor: pointer; color: #555; font-size: 13px; white-space: nowrap;">拉取模型</button>
+    </div>
+    <datalist id="model-list">
+      <option value="gpt-3.5-turbo">
+      <option value="gpt-4o">
+      <option value="gemini-1.5-pro">
+      <option value="claude-3-opus">
+    </datalist>
+  </div>
+  <button class="close-btn" onclick="saveApiSettings()">儲存並關閉</button>
+</div>
+
+<div class="modal" id="worldbook-modal">
+  <h3 style="margin-top:0;">世界書管理</h3>
+  <input type="hidden" id="editing-wb-id" value="">
+  <div class="setting-item">
+    <label>世界書名稱</label>
+    <input type="text" id="wb-name" placeholder="例如：現代都市背景">
+  </div>
+  <div class="setting-item">
+    <label>世界觀內容與規則</label>
+    <textarea id="wb-content" rows="4" placeholder="在這裡設定世界的規則、背景..."></textarea>
+  </div>
+  <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveWorldbook()">儲存 / 更新此世界書</button>
+  <div id="wb-list"></div>
+  <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
+</div>
+
+<div class="modal" id="chat-settings-modal">
+  <h3 style="margin-top:0;">當前對話設定</h3>
+  <div class="setting-item">
+    <label>更改對話名稱</label>
+    <input type="text" id="chat-name-input" placeholder="輸入新的對話名稱">
+  </div>
+  <div class="setting-item">
+    <label>連接世界書 (可多選)</label>
+    <div id="wb-checkbox-list" style="max-height: 120px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
+  </div>
+  <div class="setting-item">
+    <label>對方頭像</label>
+    <input type="file" id="ai-avatar-upload" accept="image/*" onchange="handleAiAvatarUpload(event)" style="display:none;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <img id="ai-avatar-preview" src="" style="width:50px; height:50px; border-radius:50%; background:#eee; object-fit:cover; display:none;">
+      <button onclick="document.getElementById('ai-avatar-upload').click()" style="padding:8px; background:#f4f4f4; border:1px solid #ddd; border-radius:6px; cursor:pointer;">選擇圖片</button>
+      <button onclick="clearAiAvatar()" style="padding:8px; background:#ffe4e1; color:#c0392b; border:none; border-radius:6px; cursor:pointer;">清除</button>
+    </div>
+  </div>
+  <div class="setting-item">
+    <label>我的設定 (User Prompt)</label>
+    <textarea id="user-prompt" rows="3" placeholder="你在此對話中的設定..."></textarea>
+  </div>
+  <div class="setting-item">
+    <label>對方設定 (Character Prompt)</label>
+    <textarea id="char-prompt" rows="3" placeholder="對方在此對話中的性格與設定..."></textarea>
+  </div>
+  <button class="close-btn" onclick="saveChatSettings()">套用並關閉</button>
+</div>
+
+<div class="modal" id="edit-msg-modal">
+  <h3 style="margin-top:0;">編輯訊息</h3>
+  <input type="hidden" id="edit-msg-index">
+  <div class="setting-item">
+    <textarea id="edit-msg-content" rows="6"></textarea>
+  </div>
+  <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveEditedMessage()">儲存修改</button>
+  <button class="close-btn" onclick="closeAllModals()">取消</button>
+</div>
+
+<script>
+  let chats = JSON.parse(localStorage.getItem('myChats')) || [
+    { id: Date.now(), title: '與夏準的日常', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, messages: [] }
+  ];
+  
+  chats.forEach(c => {
+    if (c.worldbookId) {
+      c.worldbookIds = [c.worldbookId];
+      delete c.worldbookId;
+    }
+    if (!c.worldbookIds) c.worldbookIds = [];
+  });
+
+  let worldbooks = JSON.parse(localStorage.getItem('myWorldbooks')) || [];
+  let apiSettings = JSON.parse(localStorage.getItem('myApiSettings')) || { url: '', key: '', model: 'gpt-3.5-turbo' };
+  let currentChatId = chats[0].id;
+
+  function init() {
+    renderChatList();
+    renderWorldbookList();
+    loadChat(currentChatId);
+    
+    document.getElementById('api-url').value = apiSettings.url || '';
+    document.getElementById('api-key').value = apiSettings.key || '';
+    document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
+  }
+
+  function renderChatList() {
+    const container = document.getElementById('chat-list-container');
+    container.innerHTML = '';
+    chats.forEach(chat => {
+      const div = document.createElement('div');
+      div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+      div.innerText = chat.title;
+      
+      let pressTimer;
+      let isPressing = false;
+
+      const startPress = (e) => {
+        isPressing = false;
+        pressTimer = setTimeout(() => {
+          isPressing = true;
+          if (confirm(`確定要刪除對話「${chat.title}」嗎？`)) deleteChat(chat.id);
+        }, 800);
+      };
+      const cancelPress = () => { clearTimeout(pressTimer); };
+
+      div.addEventListener('mousedown', startPress);
+      div.addEventListener('mouseup', cancelPress);
+      div.addEventListener('mouseleave', cancelPress);
+      div.addEventListener('touchstart', startPress);
+      div.addEventListener('touchend', cancelPress);
+      div.addEventListener('touchcancel', cancelPress);
+
+      div.onclick = (e) => {
+        if (!isPressing) loadChat(chat.id);
+      };
+
+      container.appendChild(div);
+    });
+  }
+
+  function createNewChat() {
+    const newChat = {
+      id: Date.now(), title: '新開的劇情線', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, messages: []
+    };
+    chats.push(newChat);
+    saveData();
+    loadChat(newChat.id);
+  }
+
+  function deleteChat(id) {
+    if (chats.length <= 1) {
+      alert("這是最後一個對話，不能刪除喔。");
+      return;
+    }
+    chats = chats.filter(c => c.id !== id);
+    saveData();
+    if (currentChatId === id) loadChat(chats[0].id);
+    else renderChatList();
+  }
+
+  function loadChat(id) {
+    currentChatId = id;
+    const chat = chats.find(c => c.id === id);
+    if(!chat.messages) chat.messages = [];
+    
+    document.getElementById('current-chat-title').innerText = chat.title;
+    document.getElementById('chat-name-input').value = chat.title;
+    document.getElementById('user-prompt').value = chat.userPrompt || '';
+    document.getElementById('char-prompt').value = chat.charPrompt || '';
+    
+    renderWorldbookCheckboxes();
+    
+    const avatarPreview = document.getElementById('ai-avatar-preview');
+    if(chat.aiAvatar) {
+      avatarPreview.src = chat.aiAvatar;
+      avatarPreview.style.display = 'block';
+    } else {
+      avatarPreview.style.display = 'none';
+      avatarPreview.src = '';
+    }
+    
+    renderAllMessages();
+    renderChatList();
+  }
+
+  function renderAllMessages() {
+    const chat = chats.find(c => c.id === currentChatId);
+    const msgContainer = document.getElementById('messages');
+    msgContainer.innerHTML = '';
+    
+    const defaultAvatarHtml = `<div class="ai-avatar"></div>`;
+    const customAvatarHtml = `<img src="${chat.aiAvatar}" class="ai-avatar">`;
+    const finalAvatarHtml = chat.aiAvatar ? customAvatarHtml : defaultAvatarHtml;
+    
+    if (chat.messages.length === 0) {
+      msgContainer.innerHTML = `<div class="msg ai" style="align-self: flex-start; max-width: 80%;">${finalAvatarHtml}<div>進入對話：${chat.title}。</div></div>`;
+    } else {
+      chat.messages.forEach((m, index) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = `msg-wrapper ${m.sender === 'user' ? 'user-wrapper' : 'ai-wrapper'}`;
+        
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `msg ${m.sender}`;
+        if (m.sender === 'user') {
+          msgDiv.innerHTML = m.content;
+        } else {
+          msgDiv.innerHTML = `${finalAvatarHtml}<div style="flex:1;">${m.content}</div>`;
+        }
+
+        let pressTimer;
+        const startPress = () => { pressTimer = setTimeout(() => openEditModal(index), 600); };
+        const cancelPress = () => { clearTimeout(pressTimer); };
+        
+        msgDiv.addEventListener('mousedown', startPress);
+        msgDiv.addEventListener('mouseup', cancelPress);
+        msgDiv.addEventListener('mouseleave', cancelPress);
+        msgDiv.addEventListener('touchstart', startPress);
+        msgDiv.addEventListener('touchend', cancelPress);
+        msgDiv.addEventListener('touchcancel', cancelPress);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'del-btn';
+        delBtn.innerText = '✕';
+        delBtn.onclick = () => deleteMessage(index);
+
+        wrapper.appendChild(msgDiv);
+        wrapper.appendChild(delBtn);
+        msgContainer.appendChild(wrapper);
+      });
+    }
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+  }
+
+  function handleKeyPress(e) {
+    if (e.key === 'Enter') sendFakeMessage();
+  }
+
+  function sendFakeMessage() {
+    const input = document.getElementById('user-input');
+    const text = input.value.trim();
+    if(!text) return;
+
+    const chat = chats.find(c => c.id === currentChatId);
+    chat.messages.push({ sender: 'user', content: text });
+    saveData();
+    renderAllMessages();
+    input.value = '';
+  }
+
+  async function sendTrueMessage() {
+    const input = document.getElementById('user-input');
+    const text = input.value.trim();
+    
+    if(text) {
+      const chat = chats.find(c => c.id === currentChatId);
+      chat.messages.push({ sender: 'user', content: text });
+      saveData();
+      renderAllMessages();
+      input.value = '';
+    }
+
+    if (!apiSettings.url || !apiSettings.key) {
+      alert("請先到左上角「後台 API 設定」填寫網址與密鑰。");
+      return;
+    }
+    
+    const msgDiv = document.getElementById('messages');
+    const loadingId = 'loading-' + Date.now();
+    const chat = chats.find(c => c.id === currentChatId);
+    const finalAvatarHtml = chat.aiAvatar ? `<img src="${chat.aiAvatar}" class="ai-avatar">` : `<div class="ai-avatar"></div>`;
+
+    msgDiv.innerHTML += `
+      <div class="msg ai" id="${loadingId}" style="align-self: flex-start;">
+        ${finalAvatarHtml}
+        <div style="color:#aaa; font-style:italic;">正在輸入...</div>
+      </div>`;
+    msgDiv.scrollTop = msgDiv.scrollHeight;
+
+    const reply = await callOpenAI_API();
+    
+    const loadingElement = document.getElementById(loadingId);
+    if(loadingElement) loadingElement.remove();
+    
+    chat.messages.push({ sender: 'ai', content: reply });
+    saveData();
+    renderAllMessages();
+  }
+
+  // ==== API 模型拉取邏輯 ====
+  async function fetchModels() {
+    let url = document.getElementById('api-url').value.trim();
+    const key = document.getElementById('api-key').value.trim();
+    if (!url || !key) return alert("請先填寫 API 網址與密鑰");
+
+    // 智能處理使用者輸入的結尾，確保抓取 /v1/models 路徑正確
+    if (url.endsWith('/v1/chat/completions')) url = url.replace('/v1/chat/completions', '');
+    if (url.endsWith('/v1')) url = url.replace('/v1', '');
+    if (url.endsWith('/')) url = url.slice(0, -1);
+
+    document.getElementById('api-url').value = url; // 幫用戶格式化顯示回去
+
+    const btn = document.getElementById('fetch-models-btn');
+    const originalText = btn.innerText;
+    btn.innerText = "拉取中...";
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${url}/v1/models`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${key}`
+            }
+        });
+
+        if (!response.ok) throw new Error(`狀態碼: ${response.status}`);
+        const data = await response.json();
+        
+        const datalist = document.getElementById('model-list');
+        datalist.innerHTML = '';
+        if (data.data && Array.isArray(data.data)) {
+            data.data.forEach(model => {
+                datalist.innerHTML += `<option value="${model.id}">`;
+            });
+            alert('模型拉取成功！請點擊模型輸入框下拉選擇。');
+        } else {
+            alert('獲取失敗：回傳格式不符合 OpenAI 標準，請手動輸入模型名稱。');
+        }
+    } catch (error) {
+        console.error(error);
+        alert(`拉取失敗：${error.message}\n\n(您的反代可能不支援獲取模型列表，請直接手動填寫模型名稱)`);
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+  }
+
+  // ==== 發送聊天邏輯 ====
+  async function callOpenAI_API() {
+    const chat = chats.find(c => c.id === currentChatId);
+    let systemContent = "";
+    
+    if (chat.worldbookIds && chat.worldbookIds.length > 0) {
+      chat.worldbookIds.forEach(id => {
+        const wb = worldbooks.find(w => w.id === id);
+        if (wb) systemContent += `【世界觀與背景設定 - ${wb.name}】\n${wb.content}\n\n`;
+      });
+    }
+    if (chat.charPrompt) systemContent += `【你的角色設定】\n${chat.charPrompt}\n\n`;
+    if (chat.userPrompt) systemContent += `【我的角色設定】\n${chat.userPrompt}\n\n`;
+
+    const apiMessages = [];
+    if (systemContent) {
+      apiMessages.push({ role: "system", content: systemContent.trim() });
+    }
+    
+    chat.messages.forEach(m => {
+      let cleanText = m.content.replace(/<img[^>]*>/g, "[傳送了一張圖片]");
+      apiMessages.push({ role: m.sender === 'user' ? "user" : "assistant", content: cleanText });
+    });
+
+    // 智能處理發送對話的 URL 拼接
+    let fetchUrl = apiSettings.url.trim();
+    if (fetchUrl.endsWith('/')) fetchUrl = fetchUrl.slice(0, -1);
+    
+    if (!fetchUrl.endsWith('/v1/chat/completions')) {
+        if (fetchUrl.endsWith('/v1')) {
+            fetchUrl += '/chat/completions';
+        } else {
+            fetchUrl += '/v1/chat/completions';
+        }
+    }
+
+    try {
+      const response = await fetch(fetchUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiSettings.key}`
+        },
+        body: JSON.stringify({
+          model: apiSettings.model || "gpt-3.5-turbo",
+          messages: apiMessages
+        })
+      });
+
+      if (!response.ok) throw new Error(`連線錯誤狀態碼: ${response.status}`);
+      const data = await response.json();
+      return data.choices[0].message.content;
+      
+    } catch (error) {
+      console.error(error);
+      return `（連線出了點狀況：${error.message}，請檢查 API 網址是否正確，或確認反代伺服器狀態。）`;
+    }
+  }
+
+  function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const imgTag = `<img src="${e.target.result}" style="max-width:200px; border-radius:10px; display:block;">`;
+      const chat = chats.find(c => c.id === currentChatId);
+      chat.messages.push({ sender: 'user', content: imgTag });
+      saveData();
+      renderAllMessages();
+    };
+    reader.readAsDataURL(file);
+    event.target.value = ''; 
+  }
+
+  function handleAiAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('ai-avatar-preview').src = e.target.result;
+      document.getElementById('ai-avatar-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  function clearAiAvatar() {
+    document.getElementById('ai-avatar-preview').src = '';
+    document.getElementById('ai-avatar-preview').style.display = 'none';
+  }
+
+  function deleteMessage(index) {
+    if(confirm("確定要刪除這則訊息嗎？")) {
+      const chat = chats.find(c => c.id === currentChatId);
+      chat.messages.splice(index, 1);
+      saveData();
+      renderAllMessages();
+    }
+  }
+
+  function openEditModal(index) {
+    const chat = chats.find(c => c.id === currentChatId);
+    document.getElementById('edit-msg-index').value = index;
+    document.getElementById('edit-msg-content').value = chat.messages[index].content;
+    openModal('edit-msg-modal');
+  }
+
+  function saveEditedMessage() {
+    const index = document.getElementById('edit-msg-index').value;
+    const newContent = document.getElementById('edit-msg-content').value;
+    const chat = chats.find(c => c.id === currentChatId);
+    if(newContent.trim() !== '') {
+      chat.messages[index].content = newContent;
+      saveData();
+      renderAllMessages();
+    }
+    closeAllModals();
+  }
+
+  function saveWorldbook() {
+    const idInput = document.getElementById('editing-wb-id').value;
+    const name = document.getElementById('wb-name').value.trim();
+    const content = document.getElementById('wb-content').value.trim();
+    if(!name) return alert('請輸入世界書名稱');
+    
+    if (idInput) {
+      const wb = worldbooks.find(w => w.id === idInput);
+      if(wb) { wb.name = name; wb.content = content; }
+    } else {
+      worldbooks.push({ id: Date.now().toString(), name, content });
+    }
+    saveData();
+    resetWorldbookForm();
+    renderWorldbookList();
+    renderWorldbookCheckboxes();
+  }
+
+  function renderWorldbookList() {
+    const list = document.getElementById('wb-list');
+    list.innerHTML = '';
+    worldbooks.forEach(wb => {
+      list.innerHTML += `
+        <div class="wb-item">
+          <span class="wb-item-title">${wb.name}</span>
+          <div class="wb-item-btns">
+            <button class="btn-edit" onclick="editWorldbook('${wb.id}')">編輯</button>
+            <button class="btn-delete" onclick="deleteWorldbook('${wb.id}')">刪除</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  function editWorldbook(id) {
+    const wb = worldbooks.find(w => w.id === id);
+    if(wb) {
+      document.getElementById('editing-wb-id').value = wb.id;
+      document.getElementById('wb-name').value = wb.name;
+      document.getElementById('wb-content').value = wb.content;
+    }
+  }
+
+  function deleteWorldbook(id) {
+    if(confirm("確定要刪除這個世界書嗎？")) {
+      worldbooks = worldbooks.filter(w => w.id !== id);
+      chats.forEach(c => { 
+        if(c.worldbookIds) c.worldbookIds = c.worldbookIds.filter(wid => wid !== id); 
+      });
+      saveData();
+      resetWorldbookForm();
+      renderWorldbookList();
+      renderWorldbookCheckboxes();
+    }
+  }
+
+  function resetWorldbookForm() {
+    document.getElementById('editing-wb-id').value = '';
+    document.getElementById('wb-name').value = '';
+    document.getElementById('wb-content').value = '';
+  }
+
+  function renderWorldbookCheckboxes() {
+    const list = document.getElementById('wb-checkbox-list');
+    list.innerHTML = '';
+    const chat = chats.find(c => c.id === currentChatId);
+    
+    if (worldbooks.length === 0) {
+      list.innerHTML = '<span style="color:#aaa; font-size:13px;">尚未建立世界書</span>';
+      return;
+    }
+
+    worldbooks.forEach(wb => {
+      const isChecked = chat.worldbookIds.includes(wb.id) ? 'checked' : '';
+      list.innerHTML += `
+        <label style="display:flex; align-items:center; margin-bottom:8px; cursor:pointer; font-size:14px;">
+          <input type="checkbox" value="${wb.id}" class="wb-checkbox" ${isChecked} style="margin-right:8px; cursor:pointer;">
+          ${wb.name}
+        </label>
+      `;
+    });
+  }
+
+  function saveChatSettings() {
+    const chat = chats.find(c => c.id === currentChatId);
+    chat.title = document.getElementById('chat-name-input').value || chat.title;
+    
+    const selectedWbs = Array.from(document.querySelectorAll('.wb-checkbox:checked')).map(cb => cb.value);
+    chat.worldbookIds = selectedWbs;
+    
+    chat.userPrompt = document.getElementById('user-prompt').value;
+    chat.charPrompt = document.getElementById('char-prompt').value;
+    
+    const avatarPreview = document.getElementById('ai-avatar-preview');
+    if(avatarPreview.src && avatarPreview.style.display !== 'none') {
+      chat.aiAvatar = avatarPreview.src;
+    } else {
+      chat.aiAvatar = null;
+    }
+    
+    saveData();
+    loadChat(currentChatId); 
+    closeAllModals();
+  }
+
+  function saveApiSettings() {
+    apiSettings.url = document.getElementById('api-url').value;
+    apiSettings.key = document.getElementById('api-key').value;
+    apiSettings.model = document.getElementById('api-model').value;
+    localStorage.setItem('myApiSettings', JSON.stringify(apiSettings));
+    closeAllModals();
+  }
+
+  function saveData() {
+    localStorage.setItem('myChats', JSON.stringify(chats));
+    localStorage.setItem('myWorldbooks', JSON.stringify(worldbooks));
+  }
+
+  function openModal(modalId) {
+    document.getElementById('overlay').style.display = 'block';
+    document.getElementById(modalId).style.display = 'block';
+    if(modalId === 'worldbook-modal') resetWorldbookForm();
+  }
+  function closeAllModals() {
+    document.getElementById('overlay').style.display = 'none';
+    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+  }
+
+  init();
+</script>
+</body>
+</html>
