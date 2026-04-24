@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>專屬聊天室</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 <style>
   body {
     font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
@@ -130,8 +131,8 @@
     border-radius: 18px;
     line-height: 1.5;
     letter-spacing: 0.5px;
-    word-wrap: break-word; /* 優化斷行 */
-    white-space: pre-wrap; /* 讓換行符號正常顯示 */
+    word-wrap: break-word;
+    white-space: pre-wrap;
     cursor: pointer; 
     user-select: none;
   }
@@ -358,7 +359,7 @@
     <div id="wb-checkbox-list" style="max-height: 120px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
   </div>
   <div class="setting-item">
-    <label>對方頭像</label>
+    <label>对方头像</label>
     <input type="file" id="ai-avatar-upload" accept="image/*" onchange="handleAiAvatarUpload(event)" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px;">
       <img id="ai-avatar-preview" src="" style="width:50px; height:50px; border-radius:50%; background:#eee; object-fit:cover; display:none;">
@@ -388,41 +389,70 @@
 </div>
 
 <script>
-  let chats = JSON.parse(localStorage.getItem('myChats')) || [
-    { 
-      id: Date.now(), title: '與夏準的日常', worldbookIds: [], 
-      userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
-      userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
-    }
-  ];
-  
-  chats.forEach(c => {
-    if (c.worldbookId) {
-      c.worldbookIds = [c.worldbookId];
-      delete c.worldbookId;
-    }
-    if (!c.worldbookIds) c.worldbookIds = [];
-    if (c.contextLimit === undefined) c.contextLimit = 30;
-    
-    if (!c.userBgColor) c.userBgColor = '#e6e6fa';
-    if (!c.userTextColor) c.userTextColor = '#333333';
-    if (!c.aiBgColor) c.aiBgColor = '#f9f9f9';
-    if (!c.aiTextColor) c.aiTextColor = '#333333';
-  });
+  let chats = [];
+  let worldbooks = [];
+  let apiSettings = { url: '', key: '', model: 'gpt-3.5-turbo' };
+  let currentChatId = null;
 
-  let worldbooks = JSON.parse(localStorage.getItem('myWorldbooks')) || [];
-  let apiSettings = JSON.parse(localStorage.getItem('myApiSettings')) || { url: '', key: '', model: 'gpt-3.5-turbo' };
-  let currentChatId = chats[0] ? chats[0].id : Date.now();
+  async function init() {
+    // 無痛轉移：把舊的 localStorage 資料搬到大容量的 IndexedDB
+    try {
+      const oldChats = localStorage.getItem('myChats');
+      if (oldChats) {
+        await localforage.setItem('myChats', JSON.parse(oldChats));
+        localStorage.removeItem('myChats');
+      }
+      const oldWb = localStorage.getItem('myWorldbooks');
+      if (oldWb) {
+        await localforage.setItem('myWorldbooks', JSON.parse(oldWb));
+        localStorage.removeItem('myWorldbooks');
+      }
+      const oldApi = localStorage.getItem('myApiSettings');
+      if (oldApi) {
+        await localforage.setItem('myApiSettings', JSON.parse(oldApi));
+        localStorage.removeItem('myApiSettings');
+      }
+    } catch (e) {
+      console.warn("轉移舊資料時出現問題:", e);
+    }
 
-  function init() {
-    if (chats.length === 0) createNewChat(); 
-    renderChatList();
-    renderWorldbookList();
-    loadChat(currentChatId);
+    // 讀取資料庫
+    chats = await localforage.getItem('myChats') || [];
+    worldbooks = await localforage.getItem('myWorldbooks') || [];
+    apiSettings = await localforage.getItem('myApiSettings') || { url: '', key: '', model: 'gpt-3.5-turbo' };
+
+    if (chats.length === 0) {
+      chats.push({ 
+        id: Date.now(), title: '新開的劇情線', worldbookIds: [], 
+        userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
+        userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
+      });
+      saveData();
+    }
     
+    chats.forEach(c => {
+      if (c.worldbookId) {
+        c.worldbookIds = [c.worldbookId];
+        delete c.worldbookId;
+      }
+      if (!c.worldbookIds) c.worldbookIds = [];
+      if (c.contextLimit === undefined) c.contextLimit = 30;
+      
+      if (!c.userBgColor) c.userBgColor = '#e6e6fa';
+      if (!c.userTextColor) c.userTextColor = '#333333';
+      if (!c.aiBgColor) c.aiBgColor = '#f9f9f9';
+      if (!c.aiTextColor) c.aiTextColor = '#333333';
+    });
+
+    currentChatId = chats[0].id;
+
     document.getElementById('api-url').value = apiSettings.url || '';
     document.getElementById('api-key').value = apiSettings.key || '';
     document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
+
+    renderChatList();
+    renderWorldbookList();
+    loadChat(currentChatId);
   }
 
   function renderChatList() {
@@ -827,7 +857,7 @@
     const file = event.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
       try {
         const importedData = JSON.parse(e.target.result);
         
@@ -838,8 +868,18 @@
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
             currentChatId = chats[0] ? chats[0].id : Date.now();
             
-            saveData();
-            init(); 
+            await localforage.setItem('myChats', chats);
+            await localforage.setItem('myWorldbooks', worldbooks);
+            await localforage.setItem('myApiSettings', apiSettings);
+            
+            document.getElementById('api-url').value = apiSettings.url || '';
+            document.getElementById('api-key').value = apiSettings.key || '';
+            document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
+
+            renderChatList();
+            renderWorldbookList();
+            loadChat(currentChatId);
+            
             alert("全機備份已經成功還原囉。");
             closeAllModals();
           }
@@ -854,10 +894,11 @@
             closeAllModals();
           }
         } else {
-          alert("檔案格式好像不太對喔，請確認這是 EPhone 匯出的 JSON 檔。");
+          alert("檔案格式好像不太對喔，請確認這是匯出的 JSON 檔。");
         }
       } catch (err) {
-        alert("讀取檔案失敗了。");
+        alert("讀取檔案失敗了，可能是檔案損壞或格式不正確。");
+        console.error(err);
       }
     };
     reader.readAsText(file);
@@ -982,13 +1023,13 @@
     apiSettings.url = document.getElementById('api-url').value;
     apiSettings.key = document.getElementById('api-key').value;
     apiSettings.model = document.getElementById('api-model').value;
-    localStorage.setItem('myApiSettings', JSON.stringify(apiSettings));
+    localforage.setItem('myApiSettings', apiSettings);
     closeAllModals();
   }
 
   function saveData() {
-    localStorage.setItem('myChats', JSON.stringify(chats));
-    localStorage.setItem('myWorldbooks', JSON.stringify(worldbooks));
+    localforage.setItem('myChats', chats);
+    localforage.setItem('myWorldbooks', worldbooks);
   }
 
   function openModal(modalId) {
@@ -1001,7 +1042,7 @@
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
   }
 
-  init();
+  window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
