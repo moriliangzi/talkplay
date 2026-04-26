@@ -675,6 +675,52 @@
     checkAutoBackup();
   }
 
+  async function fetchModels() {
+    let url = document.getElementById('api-url').value.trim();
+    const key = document.getElementById('api-key').value.trim();
+    if (!url || !key) return alert("請先填寫 API 網址與密鑰");
+
+    if (url.endsWith('/v1/chat/completions')) url = url.replace('/v1/chat/completions', '');
+    if (url.endsWith('/v1')) url = url.replace('/v1', '');
+    if (url.endsWith('/')) url = url.slice(0, -1);
+
+    document.getElementById('api-url').value = url; 
+
+    const btn = document.getElementById('fetch-models-btn');
+    const originalText = btn.innerText;
+    btn.innerText = "拉取中...";
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch(`${url}/v1/models`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${key}`
+            }
+        });
+
+        if (!response.ok) throw new Error(`狀態碼: ${response.status}`);
+        const data = await response.json();
+        
+        const datalist = document.getElementById('model-list');
+        datalist.innerHTML = '';
+        if (data.data && Array.isArray(data.data)) {
+            data.data.forEach(model => {
+                datalist.innerHTML += `<option value="${model.id}">`;
+            });
+            alert('模型拉取成功！請點擊模型輸入框下拉選擇。');
+        } else {
+            alert('獲取失敗：回傳格式不符合標準，請手動輸入模型名稱。');
+        }
+    } catch (error) {
+        console.error(error);
+        alert(`拉取失敗：${error.message}\n\n(您的反代可能不支援獲取模型列表，請直接手動填寫模型名稱)`);
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+  }
+
   async function callOpenAI_API() {
     const chat = chats.find(c => c.id === currentChatId);
     let systemContent = "請扮演指定的角色，並嚴格遵循以下的世界觀與人設進行對話。\n\n";
@@ -704,9 +750,13 @@
 
     let fetchUrl = apiSettings.url.trim();
     if (fetchUrl.endsWith('/')) fetchUrl = fetchUrl.slice(0, -1);
+    
     if (!fetchUrl.endsWith('/v1/chat/completions')) {
-        if (fetchUrl.endsWith('/v1')) fetchUrl += '/chat/completions';
-        else fetchUrl += '/v1/chat/completions';
+        if (fetchUrl.endsWith('/v1')) {
+            fetchUrl += '/chat/completions';
+        } else {
+            fetchUrl += '/v1/chat/completions';
+        }
     }
 
     try {
@@ -767,14 +817,12 @@
     try {
         let response;
         if (gistId) {
-            // 更新現有 Gist
             response = await fetch(`https://api.github.com/gists/${gistId}`, {
                 method: 'PATCH',
                 headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
                 body: JSON.stringify(bodyData)
             });
         } else {
-            // 建立新 Gist
             response = await fetch(`https://api.github.com/gists`, {
                 method: 'POST',
                 headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
@@ -819,7 +867,20 @@
         if (!response.ok) throw new Error(`讀取失敗: ${response.status}`);
         
         const data = await response.json();
-        const fileContent = data.files['ephone_backup.json'].content;
+        
+        // 找尋我們上傳的備份檔 (避免檔名不同)
+        const fileObj = data.files['ephone_backup.json'] || Object.values(data.files)[0];
+        
+        if (!fileObj) throw new Error('在雲端找不到備份檔案');
+
+        let fileContent = fileObj.content;
+        
+        // 關鍵修復：如果檔案因為圖片太多超過 1MB 被 GitHub 截斷，改用 raw_url 抓取完整檔案
+        if (fileObj.truncated) {
+            const rawResponse = await fetch(fileObj.raw_url);
+            fileContent = await rawResponse.text();
+        }
+
         const importedData = JSON.parse(fileContent);
 
         if (importedData.appName === "EPhone_Roleplay_Backup") {
@@ -847,7 +908,7 @@
         }
     } catch (e) {
         console.error(e);
-        alert(`下載發生錯誤：${e.message}`);
+        alert(`下載發生錯誤：${e.message}\n如果檔案太大，可能需要使用實體備份。`);
     } finally {
         btn.innerText = "從雲端下載還原"; btn.disabled = false;
     }
@@ -865,14 +926,13 @@
     localforage.setItem('myGistSettings', gistSettings);
   }
 
-  // 背景防呆自動備份
   let autoBackupTimer = null;
   function checkAutoBackup() {
       if (gistSettings.autoBackup && gistSettings.token && gistSettings.gistId) {
           clearTimeout(autoBackupTimer);
           autoBackupTimer = setTimeout(() => {
-              uploadToGist(true); // silent = true
-          }, 3000); // 延遲3秒避免連續發送時頻繁觸發
+              uploadToGist(true); 
+          }, 3000); 
       }
   }
 
@@ -900,7 +960,7 @@
       try {
         const importedData = JSON.parse(e.target.result);
         if (importedData.appName === "EPhone_Roleplay_Backup") {
-          if(confirm("確定要讀取實體還原檔嗎？")) {
+          if(confirm("確定要讀取實體還原檔嗎？這將會覆蓋當前畫面所有資料！")) {
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
@@ -919,46 +979,15 @@
             closeAllModals();
           }
         } else {
-          alert("檔案格式好像不太對喔。");
+          alert("檔案格式好像不太對喔，這不是我們這個網頁輸出的備份檔。");
         }
       } catch (err) {
-        alert("讀取檔案失敗了。");
+        alert("讀取檔案失敗了：" + err.message + "\n（如果這是妳另一個 EPhone 版本的備份，可能格式不相容喔）");
+        console.error(err);
       }
     };
     reader.readAsText(file);
     event.target.value = '';
-  }
-
-  // 基礎互動與儲存
-  async function fetchModels() {
-    let url = document.getElementById('api-url').value.trim();
-    const key = document.getElementById('api-key').value.trim();
-    if (!url || !key) return alert("請先填寫 API 網址與密鑰");
-    if (url.endsWith('/v1/chat/completions')) url = url.replace('/v1/chat/completions', '');
-    if (url.endsWith('/v1')) url = url.replace('/v1', '');
-    if (url.endsWith('/')) url = url.slice(0, -1);
-    document.getElementById('api-url').value = url; 
-
-    const btn = document.getElementById('fetch-models-btn');
-    const originalText = btn.innerText;
-    btn.innerText = "拉取中..."; btn.disabled = true;
-    try {
-        const response = await fetch(`${url}/v1/models`, {
-            method: 'GET', headers: { 'Authorization': `Bearer ${key}` }
-        });
-        if (!response.ok) throw new Error(`狀態碼: ${response.status}`);
-        const data = await response.json();
-        const datalist = document.getElementById('model-list');
-        datalist.innerHTML = '';
-        if (data.data && Array.isArray(data.data)) {
-            data.data.forEach(model => { datalist.innerHTML += `<option value="${model.id}">`; });
-            alert('模型拉取成功！請點擊模型輸入框下拉選擇。');
-        } else { alert('獲取失敗：回傳格式不符合標準。'); }
-    } catch (error) {
-        alert(`拉取失敗：${error.message}`);
-    } finally {
-        btn.innerText = originalText; btn.disabled = false;
-    }
   }
 
   function handleImageUpload(event) {
