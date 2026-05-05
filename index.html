@@ -726,7 +726,7 @@
     let systemContent = "請扮演指定的角色，並嚴格遵循以下的世界觀與人設進行對話。\n\n";
     
     if (chat.worldbookIds && chat.worldbookIds.length > 0) {
-      systemContent += "【🌍 重要世界觀與絕對規則】（請在回覆時嚴格代入此背景）：\n";
+      systemContent += "【🌍 重要世界觀與絕對規則】（請在回覆時反覆確認回覆符合內容並嚴格代入此背景）：\n";
       chat.worldbookIds.forEach(id => {
         const wb = worldbooks.find(w => w.id === id);
         if (wb) systemContent += `[${wb.name}]\n${wb.content}\n\n`;
