@@ -259,6 +259,15 @@
 
 <div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
 
+<div class="modal" id="chat-action-modal">
+  <h3 style="margin-top:0;">對話選項</h3>
+  <p id="chat-action-title" style="color:#666; margin-bottom:20px; font-size:14px;"></p>
+  <input type="hidden" id="action-chat-id">
+  <button class="close-btn" style="background:#e6e6fa; color:#555; margin-bottom:10px; font-weight:bold;" onclick="cloneChat()">複製此對話 (建立分支)</button>
+  <button class="close-btn" style="background:#ffe4e1; color:#c0392b; margin-bottom:10px; font-weight:bold;" onclick="confirmDeleteChat()">刪除此對話</button>
+  <button class="close-btn" onclick="closeAllModals()">取消</button>
+</div>
+
 <div class="modal" id="api-modal">
   <h3 style="margin-top:0;">API 設定</h3>
   <div class="setting-item">
@@ -481,8 +490,10 @@
         isPressing = false;
         pressTimer = setTimeout(() => {
           isPressing = true;
-          if (confirm(`確定要刪除對話「${chat.title}」嗎？`)) deleteChat(chat.id);
-        }, 800);
+          document.getElementById('action-chat-id').value = chat.id;
+          document.getElementById('chat-action-title').innerText = `對話「${chat.title}」的相關操作：`;
+          openModal('chat-action-modal');
+        }, 600); // 縮短一點點時間讓手感更滑順
       };
       const cancelPress = () => { clearTimeout(pressTimer); };
 
@@ -509,6 +520,30 @@
     chats.push(newChat);
     saveData();
     loadChat(newChat.id);
+  }
+
+  function cloneChat() {
+    const id = parseInt(document.getElementById('action-chat-id').value);
+    const chatToClone = chats.find(c => c.id === id);
+    if (!chatToClone) return;
+
+    // 深度拷貝對話設定跟紀錄
+    const newChat = JSON.parse(JSON.stringify(chatToClone));
+    newChat.id = Date.now();
+    newChat.title = newChat.title + ' (複製)';
+    
+    chats.push(newChat);
+    saveData();
+    loadChat(newChat.id);
+    closeAllModals();
+  }
+
+  function confirmDeleteChat() {
+    const id = parseInt(document.getElementById('action-chat-id').value);
+    if (confirm("確定要刪除這個對話嗎？刪除後無法恢復喔。")) {
+      deleteChat(id);
+      closeAllModals();
+    }
   }
 
   function deleteChat(id) {
@@ -726,7 +761,7 @@
     let systemContent = "請扮演指定的角色，並嚴格遵循以下的世界觀與人設進行對話。\n\n";
     
     if (chat.worldbookIds && chat.worldbookIds.length > 0) {
-      systemContent += "【🌍 重要世界觀與絕對規則】（請在回覆時反覆確認回覆符合內容並嚴格代入此背景）：\n";
+      systemContent += "【🌍 重要世界觀與絕對規則】（請在回覆時嚴格代入此背景）：\n";
       chat.worldbookIds.forEach(id => {
         const wb = worldbooks.find(w => w.id === id);
         if (wb) systemContent += `[${wb.name}]\n${wb.content}\n\n`;
@@ -782,7 +817,6 @@
     }
   }
 
-  // ==== 雲端 Gist 備份還原 ====
   function getBackupPayload() {
     return {
       appName: "EPhone_Roleplay_Backup",
@@ -867,15 +901,11 @@
         if (!response.ok) throw new Error(`讀取失敗: ${response.status}`);
         
         const data = await response.json();
-        
-        // 找尋我們上傳的備份檔 (避免檔名不同)
         const fileObj = data.files['ephone_backup.json'] || Object.values(data.files)[0];
-        
         if (!fileObj) throw new Error('在雲端找不到備份檔案');
 
         let fileContent = fileObj.content;
         
-        // 關鍵修復：如果檔案因為圖片太多超過 1MB 被 GitHub 截斷，改用 raw_url 抓取完整檔案
         if (fileObj.truncated) {
             const rawResponse = await fetch(fileObj.raw_url);
             fileContent = await rawResponse.text();
@@ -936,7 +966,6 @@
       }
   }
 
-  // 實體備份
   function exportFullBackup() {
     const jsonStr = JSON.stringify(getBackupPayload(), null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
@@ -982,7 +1011,7 @@
           alert("檔案格式好像不太對喔，這不是我們這個網頁輸出的備份檔。");
         }
       } catch (err) {
-        alert("讀取檔案失敗了：" + err.message + "\n（如果這是妳另一個 EPhone 版本的備份，可能格式不相容喔）");
+        alert("讀取檔案失敗了：" + err.message);
         console.error(err);
       }
     };
