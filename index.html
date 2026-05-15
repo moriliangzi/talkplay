@@ -45,13 +45,15 @@
     justify-content: space-between;
     align-items: center;
   }
-  .add-chat-btn {
+  .add-btn-group button {
     background: none;
     border: none;
-    color: #d8bfd8;
     cursor: pointer;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
+    color: #d8bfd8;
+    margin-left: 5px;
+    padding: 0 5px;
   }
   
   #chat-list-container {
@@ -60,19 +62,35 @@
     user-select: none;
   }
   .chat-item {
-    padding: 12px;
+    padding: 10px 12px;
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     cursor: pointer;
     border-left: 3px solid transparent;
-    font-size: 14px;
+    font-size: 13px;
     transition: 0.1s;
   }
   .chat-item.active {
     border-left-color: #d8bfd8;
     background: #fafafa;
+  }
+  
+  .folder-header {
+    font-size: 13px;
+    color: #777;
+    margin: 15px 0 8px 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+  }
+  .folder-header:hover { color: #555; }
+  .folder-chats {
+    padding-left: 10px;
+    border-left: 2px solid #eaeaea;
+    margin-left: 6px;
   }
 
   #chat-area {
@@ -212,13 +230,12 @@
     background: #f0f0f0; border: none; border-radius: 8px; cursor: pointer; color: #555; font-size: 14px;
   }
   
-  #wb-list { margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px; }
-  .wb-item {
+  .list-item {
     display: flex; justify-content: space-between; align-items: center;
     background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #eee;
   }
-  .wb-item-title { font-size: 14px; color: #333; }
-  .wb-item-btns button {
+  .list-item-title { font-size: 14px; color: #333; }
+  .list-item-btns button {
     padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px;
   }
   .btn-edit { background: #e6e6fa; color: #555; }
@@ -234,7 +251,10 @@
   
   <div class="chat-list-header">
     <span>我的對話清單</span>
-    <button class="add-chat-btn" title="新增對話" onclick="createNewChat()">+</button>
+    <div class="add-btn-group">
+      <button title="資料夾管理" onclick="openModal('folder-manager-modal')">📁</button>
+      <button title="新增對話" onclick="createNewChat()">＋</button>
+    </div>
   </div>
   
   <div id="chat-list-container"></div>
@@ -294,6 +314,19 @@
   <button class="close-btn" onclick="saveApiSettings()">儲存並關閉</button>
 </div>
 
+<div class="modal" id="folder-manager-modal">
+  <h3 style="margin-top:0;">資料夾分類管理</h3>
+  <div class="setting-item">
+    <label>新增資料夾名稱</label>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="new-folder-name" placeholder="例如：主線劇情" style="flex: 1;">
+      <button onclick="createNewFolder()" style="padding: 0 15px; background: #e6e6fa; border: none; border-radius: 8px; cursor: pointer; color: #555; font-size: 13px; white-space: nowrap;">建立</button>
+    </div>
+  </div>
+  <div id="folder-list" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;"></div>
+  <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
+</div>
+
 <div class="modal" id="worldbook-modal">
   <h3 style="margin-top:0;">世界書管理</h3>
   <input type="hidden" id="editing-wb-id" value="">
@@ -306,7 +339,7 @@
     <textarea id="wb-content" rows="4" placeholder="在這裡設定世界的規則、背景..."></textarea>
   </div>
   <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveWorldbook()">儲存 / 更新此世界書</button>
-  <div id="wb-list"></div>
+  <div id="wb-list" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;"></div>
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
@@ -351,6 +384,10 @@
   <div class="setting-item">
     <label>更改對話名稱</label>
     <input type="text" id="chat-name-input" placeholder="輸入新的對話名稱">
+  </div>
+  <div class="setting-item">
+    <label>所屬資料夾</label>
+    <select id="chat-folder-select"></select>
   </div>
   <div class="setting-item">
     <label>對話框顏色設定</label>
@@ -408,6 +445,7 @@
 <script>
   let chats = [];
   let worldbooks = [];
+  let folders = [];
   let apiSettings = { url: '', key: '', model: 'gpt-3.5-turbo' };
   let gistSettings = { token: '', gistId: '', autoBackup: false };
   let currentChatId = null;
@@ -415,32 +453,22 @@
   async function init() {
     try {
       const oldChats = localStorage.getItem('myChats');
-      if (oldChats) {
-        await localforage.setItem('myChats', JSON.parse(oldChats));
-        localStorage.removeItem('myChats');
-      }
+      if (oldChats) { await localforage.setItem('myChats', JSON.parse(oldChats)); localStorage.removeItem('myChats'); }
       const oldWb = localStorage.getItem('myWorldbooks');
-      if (oldWb) {
-        await localforage.setItem('myWorldbooks', JSON.parse(oldWb));
-        localStorage.removeItem('myWorldbooks');
-      }
+      if (oldWb) { await localforage.setItem('myWorldbooks', JSON.parse(oldWb)); localStorage.removeItem('myWorldbooks'); }
       const oldApi = localStorage.getItem('myApiSettings');
-      if (oldApi) {
-        await localforage.setItem('myApiSettings', JSON.parse(oldApi));
-        localStorage.removeItem('myApiSettings');
-      }
-    } catch (e) {
-      console.warn("轉移舊資料時出現問題:", e);
-    }
+      if (oldApi) { await localforage.setItem('myApiSettings', JSON.parse(oldApi)); localStorage.removeItem('myApiSettings'); }
+    } catch (e) { console.warn("轉移舊資料時出現問題:", e); }
 
     chats = await localforage.getItem('myChats') || [];
     worldbooks = await localforage.getItem('myWorldbooks') || [];
+    folders = await localforage.getItem('myFolders') || [];
     apiSettings = await localforage.getItem('myApiSettings') || { url: '', key: '', model: 'gpt-3.5-turbo' };
     gistSettings = await localforage.getItem('myGistSettings') || { token: '', gistId: '', autoBackup: false };
 
     if (chats.length === 0) {
       chats.push({ 
-        id: Date.now(), title: '新開的劇情線', worldbookIds: [], 
+        id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], 
         userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
         userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
       });
@@ -448,12 +476,10 @@
     }
     
     chats.forEach(c => {
-      if (c.worldbookId) {
-        c.worldbookIds = [c.worldbookId];
-        delete c.worldbookId;
-      }
+      if (c.worldbookId) { c.worldbookIds = [c.worldbookId]; delete c.worldbookId; }
       if (!c.worldbookIds) c.worldbookIds = [];
       if (c.contextLimit === undefined) c.contextLimit = 30;
+      if (c.folderId === undefined) c.folderId = null;
       if (!c.userBgColor) c.userBgColor = '#e6e6fa';
       if (!c.userTextColor) c.userTextColor = '#333333';
       if (!c.aiBgColor) c.aiBgColor = '#f9f9f9';
@@ -475,46 +501,147 @@
     loadChat(currentChatId);
   }
 
+  // ==== 側邊欄渲染 (支援資料夾) ====
+  function createChatElement(chat) {
+    const div = document.createElement('div');
+    div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+    div.innerText = chat.title;
+    
+    let pressTimer;
+    let isPressing = false;
+
+    const startPress = (e) => {
+      isPressing = false;
+      pressTimer = setTimeout(() => {
+        isPressing = true;
+        document.getElementById('action-chat-id').value = chat.id;
+        document.getElementById('chat-action-title').innerText = `對話「${chat.title}」的相關操作：`;
+        openModal('chat-action-modal');
+      }, 600); 
+    };
+    const cancelPress = () => { clearTimeout(pressTimer); };
+
+    div.addEventListener('mousedown', startPress);
+    div.addEventListener('mouseup', cancelPress);
+    div.addEventListener('mouseleave', cancelPress);
+    div.addEventListener('touchstart', startPress);
+    div.addEventListener('touchend', cancelPress);
+    div.addEventListener('touchcancel', cancelPress);
+
+    div.onclick = (e) => {
+      if (!isPressing) loadChat(chat.id);
+    };
+    return div;
+  }
+
   function renderChatList() {
     const container = document.getElementById('chat-list-container');
     container.innerHTML = '';
-    chats.forEach(chat => {
-      const div = document.createElement('div');
-      div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-      div.innerText = chat.title;
-      
-      let pressTimer;
-      let isPressing = false;
-
-      const startPress = (e) => {
-        isPressing = false;
-        pressTimer = setTimeout(() => {
-          isPressing = true;
-          document.getElementById('action-chat-id').value = chat.id;
-          document.getElementById('chat-action-title').innerText = `對話「${chat.title}」的相關操作：`;
-          openModal('chat-action-modal');
-        }, 600); // 縮短一點點時間讓手感更滑順
-      };
-      const cancelPress = () => { clearTimeout(pressTimer); };
-
-      div.addEventListener('mousedown', startPress);
-      div.addEventListener('mouseup', cancelPress);
-      div.addEventListener('mouseleave', cancelPress);
-      div.addEventListener('touchstart', startPress);
-      div.addEventListener('touchend', cancelPress);
-      div.addEventListener('touchcancel', cancelPress);
-
-      div.onclick = (e) => {
-        if (!isPressing) loadChat(chat.id);
-      };
-
-      container.appendChild(div);
+    
+    const validFolderIds = folders.map(f => f.id);
+    
+    // 渲染有分類的對話
+    folders.forEach(folder => {
+        const folderDiv = document.createElement('div');
+        
+        const header = document.createElement('div');
+        header.className = 'folder-header';
+        header.innerHTML = `<span style="margin-right:5px; width:12px; display:inline-block;">${folder.isOpen ? '▼' : '▶'}</span> 📁 ${folder.name}`;
+        header.onclick = () => {
+            folder.isOpen = !folder.isOpen;
+            saveData();
+            renderChatList();
+        };
+        
+        const chatsContainer = document.createElement('div');
+        chatsContainer.className = 'folder-chats';
+        chatsContainer.style.display = folder.isOpen ? 'block' : 'none';
+        
+        const folderChats = chats.filter(c => c.folderId === folder.id);
+        folderChats.forEach(chat => {
+            chatsContainer.appendChild(createChatElement(chat));
+        });
+        
+        folderDiv.appendChild(header);
+        folderDiv.appendChild(chatsContainer);
+        container.appendChild(folderDiv);
     });
+
+    // 渲染未分類對話
+    const unassignedChats = chats.filter(c => !c.folderId || !validFolderIds.includes(c.folderId));
+    if (unassignedChats.length > 0) {
+        if (folders.length > 0) {
+            const sep = document.createElement('div');
+            sep.style.cssText = "font-size:12px; color:#aaa; margin: 20px 0 8px 0; font-weight:bold;";
+            sep.innerText = "未分類對話";
+            container.appendChild(sep);
+        }
+        unassignedChats.forEach(chat => {
+            container.appendChild(createChatElement(chat));
+        });
+    }
   }
 
+  // ==== 資料夾管理邏輯 ====
+  function createNewFolder() {
+      const nameInput = document.getElementById('new-folder-name');
+      const name = nameInput.value.trim();
+      if (!name) return alert('請輸入資料夾名稱喔。');
+      
+      folders.push({
+          id: 'f_' + Date.now(),
+          name: name,
+          isOpen: true
+      });
+      nameInput.value = '';
+      saveData();
+      renderFolderManagerList();
+      renderChatList();
+  }
+
+  function renderFolderManagerList() {
+      const list = document.getElementById('folder-list');
+      list.innerHTML = '';
+      if (folders.length === 0) {
+          list.innerHTML = '<div style="color:#aaa; font-size:13px;">尚未建立任何資料夾</div>';
+          return;
+      }
+      folders.forEach(f => {
+          list.innerHTML += `
+            <div class="list-item">
+              <span class="list-item-title">📁 ${f.name}</span>
+              <div class="list-item-btns">
+                <button class="btn-delete" onclick="deleteFolder('${f.id}')">刪除</button>
+              </div>
+            </div>
+          `;
+      });
+  }
+
+  function deleteFolder(id) {
+      if(confirm('確定要刪除這個資料夾嗎？裡面的對話不會不見，會被移到未分類區。')) {
+          folders = folders.filter(f => f.id !== id);
+          chats.forEach(c => { if(c.folderId === id) c.folderId = null; });
+          saveData();
+          renderFolderManagerList();
+          renderChatList();
+      }
+  }
+
+  function renderFolderSelect() {
+      const select = document.getElementById('chat-folder-select');
+      select.innerHTML = '<option value="none">-- 不使用資料夾 (未分類) --</option>';
+      folders.forEach(f => {
+          select.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+      });
+      const chat = chats.find(c => c.id === currentChatId);
+      select.value = chat.folderId || 'none';
+  }
+
+  // ==== 對話與介面基礎邏輯 ====
   function createNewChat() {
     const newChat = {
-      id: Date.now(), title: '新開的劇情線', worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
+      id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
       userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
     };
     chats.push(newChat);
@@ -527,7 +654,6 @@
     const chatToClone = chats.find(c => c.id === id);
     if (!chatToClone) return;
 
-    // 深度拷貝對話設定跟紀錄
     const newChat = JSON.parse(JSON.stringify(chatToClone));
     newChat.id = Date.now();
     newChat.title = newChat.title + ' (複製)';
@@ -547,10 +673,7 @@
   }
 
   function deleteChat(id) {
-    if (chats.length <= 1) {
-      alert("這是最後一個對話，不能刪除喔。");
-      return;
-    }
+    if (chats.length <= 1) { alert("這是最後一個對話，不能刪除喔。"); return; }
     chats = chats.filter(c => c.id !== id);
     saveData();
     if (currentChatId === id) loadChat(chats[0].id);
@@ -574,6 +697,7 @@
     document.getElementById('ai-bg-color').value = chat.aiBgColor || '#f9f9f9';
     document.getElementById('ai-text-color').value = chat.aiTextColor || '#333333';
     
+    renderFolderSelect();
     renderWorldbookCheckboxes();
     
     const avatarPreview = document.getElementById('ai-avatar-preview');
@@ -648,46 +772,33 @@
     msgContainer.scrollTop = msgContainer.scrollHeight;
   }
 
-  function handleKeyPress(e) {
-    if (e.key === 'Enter') sendFakeMessage();
-  }
+  function handleKeyPress(e) { if (e.key === 'Enter') sendFakeMessage(); }
 
   function sendFakeMessage() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
     if(!text) return;
-
     const chat = chats.find(c => c.id === currentChatId);
     chat.messages.push({ sender: 'user', content: text });
-    saveData();
-    renderAllMessages();
-    input.value = '';
-    
+    saveData(); renderAllMessages(); input.value = '';
     checkAutoBackup();
   }
 
   async function sendTrueMessage() {
     const input = document.getElementById('user-input');
     const text = input.value.trim();
-    
     if(text) {
       const chat = chats.find(c => c.id === currentChatId);
       chat.messages.push({ sender: 'user', content: text });
-      saveData();
-      renderAllMessages();
-      input.value = '';
+      saveData(); renderAllMessages(); input.value = '';
     }
 
-    if (!apiSettings.url || !apiSettings.key) {
-      alert("請先到左上角「後台 API 設定」填寫網址與密鑰。");
-      return;
-    }
+    if (!apiSettings.url || !apiSettings.key) return alert("請先到左上角「後台 API 設定」填寫網址與密鑰。");
     
     const msgDiv = document.getElementById('messages');
     const loadingId = 'loading-' + Date.now();
     const chat = chats.find(c => c.id === currentChatId);
     const finalAvatarHtml = chat.aiAvatar ? `<img src="${chat.aiAvatar}" class="ai-avatar">` : `<div class="ai-avatar"></div>`;
-
     const aiBg = chat.aiBgColor || '#f9f9f9';
     const aiColor = chat.aiTextColor || '#333333';
 
@@ -699,15 +810,11 @@
     msgDiv.scrollTop = msgDiv.scrollHeight;
 
     const reply = await callOpenAI_API();
-    
     const loadingElement = document.getElementById(loadingId);
     if(loadingElement) loadingElement.remove();
     
     chat.messages.push({ sender: 'ai', content: reply });
-    saveData();
-    renderAllMessages();
-    
-    checkAutoBackup();
+    saveData(); renderAllMessages(); checkAutoBackup();
   }
 
   async function fetchModels() {
@@ -723,36 +830,25 @@
 
     const btn = document.getElementById('fetch-models-btn');
     const originalText = btn.innerText;
-    btn.innerText = "拉取中...";
-    btn.disabled = true;
+    btn.innerText = "拉取中..."; btn.disabled = true;
     
     try {
         const response = await fetch(`${url}/v1/models`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${key}`
-            }
+            method: 'GET', headers: { 'Authorization': `Bearer ${key}` }
         });
-
         if (!response.ok) throw new Error(`狀態碼: ${response.status}`);
         const data = await response.json();
         
         const datalist = document.getElementById('model-list');
         datalist.innerHTML = '';
         if (data.data && Array.isArray(data.data)) {
-            data.data.forEach(model => {
-                datalist.innerHTML += `<option value="${model.id}">`;
-            });
+            data.data.forEach(model => { datalist.innerHTML += `<option value="${model.id}">`; });
             alert('模型拉取成功！請點擊模型輸入框下拉選擇。');
-        } else {
-            alert('獲取失敗：回傳格式不符合標準，請手動輸入模型名稱。');
-        }
+        } else { alert('獲取失敗：回傳格式不符合標準。'); }
     } catch (error) {
-        console.error(error);
         alert(`拉取失敗：${error.message}\n\n(您的反代可能不支援獲取模型列表，請直接手動填寫模型名稱)`);
     } finally {
-        btn.innerText = originalText;
-        btn.disabled = false;
+        btn.innerText = originalText; btn.disabled = false;
     }
   }
 
@@ -771,9 +867,7 @@
     if (chat.userPrompt) systemContent += `【👤 我的設定】（你對話的對象）：\n${chat.userPrompt}\n\n`;
 
     const apiMessages = [];
-    if (systemContent.trim()) {
-      apiMessages.push({ role: "system", content: systemContent.trim() });
-    }
+    if (systemContent.trim()) { apiMessages.push({ role: "system", content: systemContent.trim() }); }
     
     const limit = parseInt(chat.contextLimit) || 30;
     const recentMessages = chat.messages.slice(-limit);
@@ -785,44 +879,34 @@
 
     let fetchUrl = apiSettings.url.trim();
     if (fetchUrl.endsWith('/')) fetchUrl = fetchUrl.slice(0, -1);
-    
     if (!fetchUrl.endsWith('/v1/chat/completions')) {
-        if (fetchUrl.endsWith('/v1')) {
-            fetchUrl += '/chat/completions';
-        } else {
-            fetchUrl += '/v1/chat/completions';
-        }
+        if (fetchUrl.endsWith('/v1')) fetchUrl += '/chat/completions';
+        else fetchUrl += '/v1/chat/completions';
     }
 
     try {
       const response = await fetch(fetchUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiSettings.key}`
-        },
-        body: JSON.stringify({
-          model: apiSettings.model || "gpt-3.5-turbo",
-          messages: apiMessages
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiSettings.key}` },
+        body: JSON.stringify({ model: apiSettings.model || "gpt-3.5-turbo", messages: apiMessages })
       });
 
       if (!response.ok) throw new Error(`連線錯誤狀態碼: ${response.status}`);
       const data = await response.json();
       return data.choices[0].message.content;
-      
     } catch (error) {
-      console.error(error);
-      return `（連線出了點狀況：${error.message}，請檢查 API 網址是否正確，或確認反代伺服器狀態。）`;
+      return `（連線出了點狀況：${error.message}）`;
     }
   }
 
+  // ==== 雲端備份邏輯 ====
   function getBackupPayload() {
     return {
       appName: "EPhone_Roleplay_Backup",
-      version: 1,
+      version: 2, // 升級包含 Folders
       apiSettings: apiSettings,
       worldbooks: worldbooks,
+      folders: folders,
       chats: chats
     };
   }
@@ -830,19 +914,12 @@
   async function uploadToGist(silent = false) {
     const token = document.getElementById('gist-token').value.trim();
     let gistId = document.getElementById('gist-id').value.trim();
-    
-    if (!token) {
-        if (!silent) alert('請先輸入 GitHub Token 喔。');
-        return;
-    }
+    if (!token) { if (!silent) alert('請先輸入 GitHub Token 喔。'); return; }
 
     const payload = JSON.stringify(getBackupPayload(), null, 2);
     const bodyData = {
-        description: "EPhone Roleplay Chat Backup",
-        public: false,
-        files: {
-            "ephone_backup.json": { content: payload }
-        }
+        description: "EPhone Roleplay Chat Backup", public: false,
+        files: { "ephone_backup.json": { content: payload } }
     };
 
     const btn = document.getElementById('btn-gist-upload');
@@ -852,30 +929,23 @@
         let response;
         if (gistId) {
             response = await fetch(`https://api.github.com/gists/${gistId}`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
+                method: 'PATCH', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
                 body: JSON.stringify(bodyData)
             });
         } else {
             response = await fetch(`https://api.github.com/gists`, {
-                method: 'POST',
-                headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
+                method: 'POST', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
                 body: JSON.stringify(bodyData)
             });
         }
-
         if (!response.ok) throw new Error(`上傳失敗: ${response.status}`);
-        
         const data = await response.json();
         gistSettings.gistId = data.id;
         document.getElementById('gist-id').value = data.id;
-        
         saveGistSettingsLocally();
-        if (!silent) alert('成功上傳到雲端囉！Gist ID 已經自動幫妳記下來了。');
-        
+        if (!silent) alert('成功上傳到雲端囉！');
     } catch (e) {
-        console.error(e);
-        if (!silent) alert(`發生錯誤：${e.message}\n(請確認妳的 Token 是否正確，且有勾選 gist 權限)`);
+        if (!silent) alert(`發生錯誤：${e.message}`);
     } finally {
         if (btn) { btn.innerText = "上傳至雲端"; btn.disabled = false; }
     }
@@ -884,9 +954,7 @@
   async function downloadFromGist() {
     const token = document.getElementById('gist-token').value.trim();
     const gistId = document.getElementById('gist-id').value.trim();
-
     if (!token || !gistId) return alert('請確認 Token 和 Gist ID 都已經填寫喔。');
-    
     if (!confirm("確定要從雲端下載並覆蓋現在的所有進度嗎？")) return;
 
     const btn = document.getElementById('btn-gist-download');
@@ -894,33 +962,30 @@
 
     try {
         const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-            method: 'GET',
-            headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
+            method: 'GET', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
         });
-
         if (!response.ok) throw new Error(`讀取失敗: ${response.status}`);
-        
         const data = await response.json();
         const fileObj = data.files['ephone_backup.json'] || Object.values(data.files)[0];
         if (!fileObj) throw new Error('在雲端找不到備份檔案');
 
         let fileContent = fileObj.content;
-        
         if (fileObj.truncated) {
             const rawResponse = await fetch(fileObj.raw_url);
             fileContent = await rawResponse.text();
         }
 
         const importedData = JSON.parse(fileContent);
-
         if (importedData.appName === "EPhone_Roleplay_Backup") {
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
+            folders = importedData.folders || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
             currentChatId = chats[0] ? chats[0].id : Date.now();
             
             await localforage.setItem('myChats', chats);
             await localforage.setItem('myWorldbooks', worldbooks);
+            await localforage.setItem('myFolders', folders);
             await localforage.setItem('myApiSettings', apiSettings);
             
             document.getElementById('api-url').value = apiSettings.url || '';
@@ -930,14 +995,12 @@
             renderChatList();
             renderWorldbookList();
             loadChat(currentChatId);
-            
             alert("雲端備份已經成功還原囉！");
             closeAllModals();
         } else {
             alert("雲端上的資料格式不太對喔。");
         }
     } catch (e) {
-        console.error(e);
         alert(`下載發生錯誤：${e.message}\n如果檔案太大，可能需要使用實體備份。`);
     } finally {
         btn.innerText = "從雲端下載還原"; btn.disabled = false;
@@ -948,21 +1011,15 @@
     gistSettings.token = document.getElementById('gist-token').value.trim();
     gistSettings.gistId = document.getElementById('gist-id').value.trim();
     gistSettings.autoBackup = document.getElementById('auto-backup-gist').checked;
-    saveGistSettingsLocally();
-    closeAllModals();
+    saveGistSettingsLocally(); closeAllModals();
   }
-
-  function saveGistSettingsLocally() {
-    localforage.setItem('myGistSettings', gistSettings);
-  }
+  function saveGistSettingsLocally() { localforage.setItem('myGistSettings', gistSettings); }
 
   let autoBackupTimer = null;
   function checkAutoBackup() {
       if (gistSettings.autoBackup && gistSettings.token && gistSettings.gistId) {
           clearTimeout(autoBackupTimer);
-          autoBackupTimer = setTimeout(() => {
-              uploadToGist(true); 
-          }, 3000); 
+          autoBackupTimer = setTimeout(() => { uploadToGist(true); }, 3000); 
       }
   }
 
@@ -992,31 +1049,28 @@
           if(confirm("確定要讀取實體還原檔嗎？這將會覆蓋當前畫面所有資料！")) {
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
+            folders = importedData.folders || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
             currentChatId = chats[0] ? chats[0].id : Date.now();
             await localforage.setItem('myChats', chats);
             await localforage.setItem('myWorldbooks', worldbooks);
+            await localforage.setItem('myFolders', folders);
             await localforage.setItem('myApiSettings', apiSettings);
             
             document.getElementById('api-url').value = apiSettings.url || '';
             document.getElementById('api-key').value = apiSettings.key || '';
             document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
-            renderChatList();
-            renderWorldbookList();
-            loadChat(currentChatId);
-            alert("全機備份已經成功還原囉。");
-            closeAllModals();
+            renderChatList(); renderWorldbookList(); loadChat(currentChatId);
+            alert("全機備份已經成功還原囉。"); closeAllModals();
           }
         } else {
           alert("檔案格式好像不太對喔，這不是我們這個網頁輸出的備份檔。");
         }
       } catch (err) {
         alert("讀取檔案失敗了：" + err.message);
-        console.error(err);
       }
     };
-    reader.readAsText(file);
-    event.target.value = '';
+    reader.readAsText(file); event.target.value = '';
   }
 
   function handleImageUpload(event) {
@@ -1027,8 +1081,7 @@
       const imgTag = `<img src="${e.target.result}" style="max-width:200px; border-radius:10px; display:block;">`;
       const chat = chats.find(c => c.id === currentChatId);
       chat.messages.push({ sender: 'user', content: imgTag });
-      saveData(); renderAllMessages();
-      checkAutoBackup();
+      saveData(); renderAllMessages(); checkAutoBackup();
     };
     reader.readAsDataURL(file); event.target.value = ''; 
   }
@@ -1053,8 +1106,7 @@
     if(confirm("確定要刪除這則訊息嗎？")) {
       const chat = chats.find(c => c.id === currentChatId);
       chat.messages.splice(index, 1);
-      saveData(); renderAllMessages();
-      checkAutoBackup();
+      saveData(); renderAllMessages(); checkAutoBackup();
     }
   }
 
@@ -1071,12 +1123,12 @@
     const chat = chats.find(c => c.id === currentChatId);
     if(newContent.trim() !== '') {
       chat.messages[index].content = newContent;
-      saveData(); renderAllMessages();
-      checkAutoBackup();
+      saveData(); renderAllMessages(); checkAutoBackup();
     }
     closeAllModals();
   }
 
+  // ==== 世界書設定儲存 ====
   function saveWorldbook() {
     const idInput = document.getElementById('editing-wb-id').value;
     const name = document.getElementById('wb-name').value.trim();
@@ -1096,9 +1148,9 @@
     list.innerHTML = '';
     worldbooks.forEach(wb => {
       list.innerHTML += `
-        <div class="wb-item">
-          <span class="wb-item-title">${wb.name}</span>
-          <div class="wb-item-btns">
+        <div class="list-item">
+          <span class="list-item-title">${wb.name}</span>
+          <div class="list-item-btns">
             <button class="btn-edit" onclick="editWorldbook('${wb.id}')">編輯</button>
             <button class="btn-delete" onclick="deleteWorldbook('${wb.id}')">刪除</button>
           </div>
@@ -1157,6 +1209,11 @@
     chat.title = document.getElementById('chat-name-input').value || chat.title;
     const limitInput = parseInt(document.getElementById('context-limit-input').value);
     chat.contextLimit = isNaN(limitInput) ? 30 : limitInput;
+    
+    // 儲存資料夾歸屬
+    const folderSelect = document.getElementById('chat-folder-select').value;
+    chat.folderId = folderSelect === 'none' ? null : folderSelect;
+
     const selectedWbs = Array.from(document.querySelectorAll('.wb-checkbox:checked')).map(cb => cb.value);
     chat.worldbookIds = selectedWbs;
     chat.userPrompt = document.getElementById('user-prompt').value;
@@ -1186,6 +1243,7 @@
   function saveData() {
     localforage.setItem('myChats', chats);
     localforage.setItem('myWorldbooks', worldbooks);
+    localforage.setItem('myFolders', folders);
   }
 
   function openModal(modalId) {
@@ -1193,7 +1251,7 @@
     document.getElementById(modalId).style.display = 'block';
     
     if(modalId === 'worldbook-modal') resetWorldbookForm();
-    
+    if(modalId === 'folder-manager-modal') renderFolderManagerList();
     if(modalId === 'backup-modal') {
       document.getElementById('gist-token').value = gistSettings.token || '';
       document.getElementById('gist-id').value = gistSettings.gistId || '';
