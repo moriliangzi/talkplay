@@ -154,6 +154,12 @@
     cursor: pointer; 
     user-select: none;
   }
+  
+  /* 讓格式化文字更美觀 */
+  .msg strong { font-weight: 800; }
+  .msg em { font-style: italic; opacity: 0.9; }
+  .msg del { opacity: 0.6; }
+
   .ai-avatar {
     width: 35px; height: 35px; border-radius: 50%;
     background: #d8bfd8; object-fit: cover; flex-shrink: 0;
@@ -279,6 +285,7 @@
 
 <div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
 
+<!-- 對話選項視窗 -->
 <div class="modal" id="chat-action-modal">
   <h3 style="margin-top:0;">對話選項</h3>
   <p id="chat-action-title" style="color:#666; margin-bottom:20px; font-size:14px;"></p>
@@ -288,6 +295,7 @@
   <button class="close-btn" onclick="closeAllModals()">取消</button>
 </div>
 
+<!-- API 設定 -->
 <div class="modal" id="api-modal">
   <h3 style="margin-top:0;">API 設定</h3>
   <div class="setting-item">
@@ -295,7 +303,7 @@
     <input type="text" id="api-url" placeholder="例如：https://api.openai.com">
   </div>
   <div class="setting-item">
-    <label>密鑰 (Key)</label>
+    <label>密鑰 (Key) <span style="font-size:11px; color:#888;">(支援用英文逗號隔開填入多組)</span></label>
     <input type="password" id="api-key" placeholder="填入 API Key">
   </div>
   <div class="setting-item">
@@ -314,6 +322,7 @@
   <button class="close-btn" onclick="saveApiSettings()">儲存並關閉</button>
 </div>
 
+<!-- 資料夾管理 -->
 <div class="modal" id="folder-manager-modal">
   <h3 style="margin-top:0;">資料夾分類管理</h3>
   <div class="setting-item">
@@ -327,6 +336,7 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
+<!-- 世界書管理 -->
 <div class="modal" id="worldbook-modal">
   <h3 style="margin-top:0;">世界書管理</h3>
   <input type="hidden" id="editing-wb-id" value="">
@@ -343,6 +353,7 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
+<!-- 備份與雲端管理 -->
 <div class="modal" id="backup-modal">
   <h3 style="margin-top:0;">全機備份與雲端</h3>
   
@@ -379,6 +390,7 @@
   <button class="close-btn" onclick="saveGistSettingsAndClose()" style="margin-top:20px;">儲存並關閉</button>
 </div>
 
+<!-- 對話設定 -->
 <div class="modal" id="chat-settings-modal">
   <h3 style="margin-top:0;">當前對話設定</h3>
   <div class="setting-item">
@@ -432,6 +444,7 @@
   <button class="close-btn" onclick="saveChatSettings()">套用並關閉</button>
 </div>
 
+<!-- 編輯訊息視窗 -->
 <div class="modal" id="edit-msg-modal">
   <h3 style="margin-top:0;">編輯訊息</h3>
   <input type="hidden" id="edit-msg-index">
@@ -501,7 +514,31 @@
     loadChat(currentChatId);
   }
 
-  // ==== 側邊欄渲染 (支援資料夾) ====
+  // 取得隨機的 API Key (支援逗號分隔)
+  function getRandomKey(keyStr) {
+    if (!keyStr) return '';
+    if (keyStr.includes(',')) {
+      const arr = keyStr.split(',').map(item => item.trim());
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+    return keyStr;
+  }
+
+  // Markdown 格式轉換函數
+  function parseMarkdown(text) {
+    if (!text) return '';
+    let html = text;
+    // 粗斜體 ***字***
+    html = html.replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    // 粗體 **字**
+    html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
+    // 斜體 *字*
+    html = html.replace(/\*([\s\S]*?)\*/g, '<em>$1</em>');
+    // 刪除線 ~~字~~
+    html = html.replace(/~~([\s\S]*?)~~/g, '<del>$1</del>');
+    return html;
+  }
+
   function createChatElement(chat) {
     const div = document.createElement('div');
     div.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
@@ -540,7 +577,6 @@
     
     const validFolderIds = folders.map(f => f.id);
     
-    // 渲染有分類的對話
     folders.forEach(folder => {
         const folderDiv = document.createElement('div');
         
@@ -567,7 +603,6 @@
         container.appendChild(folderDiv);
     });
 
-    // 渲染未分類對話
     const unassignedChats = chats.filter(c => !c.folderId || !validFolderIds.includes(c.folderId));
     if (unassignedChats.length > 0) {
         if (folders.length > 0) {
@@ -582,7 +617,6 @@
     }
   }
 
-  // ==== 資料夾管理邏輯 ====
   function createNewFolder() {
       const nameInput = document.getElementById('new-folder-name');
       const name = nameInput.value.trim();
@@ -638,7 +672,6 @@
       select.value = chat.folderId || 'none';
   }
 
-  // ==== 對話與介面基礎邏輯 ====
   function createNewChat() {
     const newChat = {
       id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
@@ -738,14 +771,17 @@
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ${m.sender}`;
         
+        // 透過 Markdown 轉換器解析內容
+        const formattedContent = parseMarkdown(m.content);
+
         if (m.sender === 'user') {
           msgDiv.style.background = userBg;
           msgDiv.style.color = userColor;
-          msgDiv.innerHTML = m.content;
+          msgDiv.innerHTML = formattedContent;
         } else {
           msgDiv.style.background = aiBg;
           msgDiv.style.color = aiColor;
-          msgDiv.innerHTML = `${finalAvatarHtml}<div style="flex:1;">${m.content}</div>`;
+          msgDiv.innerHTML = `${finalAvatarHtml}<div style="flex:1;">${formattedContent}</div>`;
         }
 
         let pressTimer;
@@ -819,26 +855,23 @@
 
   async function fetchModels() {
     let url = document.getElementById('api-url').value.trim();
-    const key = document.getElementById('api-key').value.trim();
+    const key = getRandomKey(document.getElementById('api-key').value.trim());
     if (!url || !key) return alert("請先填寫 API 網址與密鑰");
 
     if (url.endsWith('/v1/chat/completions')) url = url.replace('/v1/chat/completions', '');
     if (url.endsWith('/v1')) url = url.replace('/v1', '');
     if (url.endsWith('/')) url = url.slice(0, -1);
-
     document.getElementById('api-url').value = url; 
 
     const btn = document.getElementById('fetch-models-btn');
     const originalText = btn.innerText;
     btn.innerText = "拉取中..."; btn.disabled = true;
-    
     try {
         const response = await fetch(`${url}/v1/models`, {
             method: 'GET', headers: { 'Authorization': `Bearer ${key}` }
         });
         if (!response.ok) throw new Error(`狀態碼: ${response.status}`);
         const data = await response.json();
-        
         const datalist = document.getElementById('model-list');
         datalist.innerHTML = '';
         if (data.data && Array.isArray(data.data)) {
@@ -846,7 +879,7 @@
             alert('模型拉取成功！請點擊模型輸入框下拉選擇。');
         } else { alert('獲取失敗：回傳格式不符合標準。'); }
     } catch (error) {
-        alert(`拉取失敗：${error.message}\n\n(您的反代可能不支援獲取模型列表，請直接手動填寫模型名稱)`);
+        alert(`拉取失敗：${error.message}`);
     } finally {
         btn.innerText = originalText; btn.disabled = false;
     }
@@ -884,10 +917,12 @@
         else fetchUrl += '/v1/chat/completions';
     }
 
+    const activeKey = getRandomKey(apiSettings.key);
+
     try {
       const response = await fetch(fetchUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiSettings.key}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${activeKey}` },
         body: JSON.stringify({ model: apiSettings.model || "gpt-3.5-turbo", messages: apiMessages })
       });
 
@@ -899,15 +934,10 @@
     }
   }
 
-  // ==== 雲端備份邏輯 ====
   function getBackupPayload() {
     return {
-      appName: "EPhone_Roleplay_Backup",
-      version: 2, // 升級包含 Folders
-      apiSettings: apiSettings,
-      worldbooks: worldbooks,
-      folders: folders,
-      chats: chats
+      appName: "EPhone_Roleplay_Backup", version: 2,
+      apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, chats: chats
     };
   }
 
@@ -917,11 +947,7 @@
     if (!token) { if (!silent) alert('請先輸入 GitHub Token 喔。'); return; }
 
     const payload = JSON.stringify(getBackupPayload(), null, 2);
-    const bodyData = {
-        description: "EPhone Roleplay Chat Backup", public: false,
-        files: { "ephone_backup.json": { content: payload } }
-    };
-
+    const bodyData = { description: "EPhone Roleplay Chat Backup", public: false, files: { "ephone_backup.json": { content: payload } } };
     const btn = document.getElementById('btn-gist-upload');
     if (btn) { btn.innerText = "上傳中..."; btn.disabled = true; }
 
@@ -929,19 +955,16 @@
         let response;
         if (gistId) {
             response = await fetch(`https://api.github.com/gists/${gistId}`, {
-                method: 'PATCH', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
-                body: JSON.stringify(bodyData)
+                method: 'PATCH', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(bodyData)
             });
         } else {
             response = await fetch(`https://api.github.com/gists`, {
-                method: 'POST', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' },
-                body: JSON.stringify(bodyData)
+                method: 'POST', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(bodyData)
             });
         }
         if (!response.ok) throw new Error(`上傳失敗: ${response.status}`);
         const data = await response.json();
-        gistSettings.gistId = data.id;
-        document.getElementById('gist-id').value = data.id;
+        gistSettings.gistId = data.id; document.getElementById('gist-id').value = data.id;
         saveGistSettingsLocally();
         if (!silent) alert('成功上傳到雲端囉！');
     } catch (e) {
@@ -992,14 +1015,9 @@
             document.getElementById('api-key').value = apiSettings.key || '';
             document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
 
-            renderChatList();
-            renderWorldbookList();
-            loadChat(currentChatId);
-            alert("雲端備份已經成功還原囉！");
-            closeAllModals();
-        } else {
-            alert("雲端上的資料格式不太對喔。");
-        }
+            renderChatList(); renderWorldbookList(); loadChat(currentChatId);
+            alert("雲端備份已經成功還原囉！"); closeAllModals();
+        } else { alert("雲端上的資料格式不太對喔。"); }
     } catch (e) {
         alert(`下載發生錯誤：${e.message}\n如果檔案太大，可能需要使用實體備份。`);
     } finally {
@@ -1063,12 +1081,8 @@
             renderChatList(); renderWorldbookList(); loadChat(currentChatId);
             alert("全機備份已經成功還原囉。"); closeAllModals();
           }
-        } else {
-          alert("檔案格式好像不太對喔，這不是我們這個網頁輸出的備份檔。");
-        }
-      } catch (err) {
-        alert("讀取檔案失敗了：" + err.message);
-      }
+        } else { alert("檔案格式好像不太對喔，這不是我們這個網頁輸出的備份檔。"); }
+      } catch (err) { alert("讀取檔案失敗了：" + err.message); }
     };
     reader.readAsText(file); event.target.value = '';
   }
@@ -1128,7 +1142,6 @@
     closeAllModals();
   }
 
-  // ==== 世界書設定儲存 ====
   function saveWorldbook() {
     const idInput = document.getElementById('editing-wb-id').value;
     const name = document.getElementById('wb-name').value.trim();
@@ -1148,9 +1161,9 @@
     list.innerHTML = '';
     worldbooks.forEach(wb => {
       list.innerHTML += `
-        <div class="list-item">
-          <span class="list-item-title">${wb.name}</span>
-          <div class="list-item-btns">
+        <div class="wb-item">
+          <span class="wb-item-title">${wb.name}</span>
+          <div class="wb-item-btns">
             <button class="btn-edit" onclick="editWorldbook('${wb.id}')">編輯</button>
             <button class="btn-delete" onclick="deleteWorldbook('${wb.id}')">刪除</button>
           </div>
@@ -1210,7 +1223,6 @@
     const limitInput = parseInt(document.getElementById('context-limit-input').value);
     chat.contextLimit = isNaN(limitInput) ? 30 : limitInput;
     
-    // 儲存資料夾歸屬
     const folderSelect = document.getElementById('chat-folder-select').value;
     chat.folderId = folderSelect === 'none' ? null : folderSelect;
 
