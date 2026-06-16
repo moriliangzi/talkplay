@@ -153,6 +153,7 @@
     white-space: pre-wrap;
     cursor: pointer; 
     user-select: none;
+    transition: 0.1s;
   }
   
   .msg strong { font-weight: 800; }
@@ -188,6 +189,14 @@
     gap: 10px;
     background: #fff;
     align-items: center;
+  }
+  #multi-select-toolbar {
+    display: none;
+    padding: 20px;
+    border-top: 1px solid #f0f0f0;
+    background: #fff;
+    align-items: center;
+    justify-content: space-between;
   }
   .upload-btn {
     width: 40px; height: 40px; border-radius: 50%;
@@ -280,11 +289,18 @@
     <button id="true-send-btn" onclick="sendTrueMessage()" title="呼叫回覆">呼叫</button>
     <button id="fake-send-btn" onclick="sendFakeMessage()">發送</button>
   </div>
+
+  <div id="multi-select-toolbar">
+    <span id="multi-select-count" style="color:#666; font-size:14px; font-weight:bold;">已選擇 0 條訊息</span>
+    <div style="display:flex; gap:10px;">
+        <button onclick="cancelMultiSelect()" style="padding:10px 20px; background:#f4f4f4; border:1px solid #ddd; border-radius:20px; cursor:pointer; color:#555;">取消</button>
+        <button onclick="deleteSelectedMessages()" style="padding:10px 20px; background:#ffe4e1; border:none; border-radius:20px; cursor:pointer; color:#c0392b; font-weight:bold;">刪除勾選</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
 
-<!-- 對話選項視窗 -->
 <div class="modal" id="chat-action-modal">
   <h3 style="margin-top:0;">對話選項</h3>
   <p id="chat-action-title" style="color:#666; margin-bottom:20px; font-size:14px;"></p>
@@ -294,7 +310,27 @@
   <button class="close-btn" onclick="closeAllModals()">取消</button>
 </div>
 
-<!-- API 設定 -->
+<div class="modal" id="msg-action-modal">
+  <h3 style="margin-top:0;">訊息選項</h3>
+  <input type="hidden" id="action-msg-index">
+  <button class="close-btn" style="background:#e6e6fa; color:#555; margin-bottom:10px; font-weight:bold;" onclick="copyMessage()">複製訊息內容</button>
+  <button class="close-btn" style="background:#f4f4f4; color:#555; margin-bottom:10px;" onclick="openEditModalFromAction()">編輯此訊息</button>
+  <button class="close-btn" style="background:#f4f4f4; color:#555; margin-bottom:10px;" onclick="branchChatBackward()">以此為界建立分支 (保留到此句為止)</button>
+  <button class="close-btn" style="background:#f4f4f4; color:#555; margin-bottom:10px;" onclick="branchChatForward()">以此為界建立分支 (從此句開始往後)</button>
+  <button class="close-btn" style="background:#ffe4e1; color:#c0392b; margin-bottom:10px; font-weight:bold;" onclick="enableMultiSelectMode()">多選模式 (批次刪除)</button>
+  <button class="close-btn" onclick="closeAllModals()">取消</button>
+</div>
+
+<div class="modal" id="edit-msg-modal">
+  <h3 style="margin-top:0;">編輯訊息</h3>
+  <input type="hidden" id="edit-msg-index">
+  <div class="setting-item">
+    <textarea id="edit-msg-content" rows="6"></textarea>
+  </div>
+  <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveEditedMessage()">儲存修改</button>
+  <button class="close-btn" onclick="closeAllModals()">取消</button>
+</div>
+
 <div class="modal" id="api-modal">
   <h3 style="margin-top:0;">API 設定</h3>
   <div class="setting-item">
@@ -321,7 +357,6 @@
   <button class="close-btn" onclick="saveApiSettings()">儲存並關閉</button>
 </div>
 
-<!-- 對話資料夾管理 -->
 <div class="modal" id="folder-manager-modal">
   <h3 style="margin-top:0;">對話資料夾管理</h3>
   <div class="setting-item">
@@ -335,7 +370,6 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
-<!-- 世界書資料夾管理 -->
 <div class="modal" id="wb-folder-manager-modal">
   <h3 style="margin-top:0;">世界書分類管理</h3>
   <div class="setting-item">
@@ -349,7 +383,6 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">返回世界書管理</button>
 </div>
 
-<!-- 世界書管理 -->
 <div class="modal" id="worldbook-modal">
   <h3 style="margin-top:0;">世界書管理</h3>
   <input type="hidden" id="editing-wb-id" value="">
@@ -370,10 +403,8 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
-<!-- 備份與雲端管理 -->
 <div class="modal" id="backup-modal">
   <h3 style="margin-top:0;">全機備份與雲端</h3>
-  
   <div class="setting-item" style="margin-bottom:20px;">
     <label style="color:#666;">本地實體備份</label>
     <div style="display:flex; gap:10px;">
@@ -407,7 +438,6 @@
   <button class="close-btn" onclick="saveGistSettingsAndClose()" style="margin-top:20px;">儲存並關閉</button>
 </div>
 
-<!-- 對話設定 -->
 <div class="modal" id="chat-settings-modal">
   <h3 style="margin-top:0;">當前對話設定</h3>
   <div class="setting-item">
@@ -461,17 +491,6 @@
   <button class="close-btn" onclick="saveChatSettings()">套用並關閉</button>
 </div>
 
-<!-- 編輯訊息視窗 -->
-<div class="modal" id="edit-msg-modal">
-  <h3 style="margin-top:0;">編輯訊息</h3>
-  <input type="hidden" id="edit-msg-index">
-  <div class="setting-item">
-    <textarea id="edit-msg-content" rows="6"></textarea>
-  </div>
-  <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveEditedMessage()">儲存修改</button>
-  <button class="close-btn" onclick="closeAllModals()">取消</button>
-</div>
-
 <script>
   let chats = [];
   let worldbooks = [];
@@ -480,6 +499,10 @@
   let apiSettings = { url: '', key: '', model: 'gpt-3.5-turbo' };
   let gistSettings = { token: '', gistId: '', autoBackup: false };
   let currentChatId = null;
+  
+  // 多選模式變數
+  let isMultiSelectMode = false;
+  let selectedMsgIndices = new Set();
 
   async function init() {
     try {
@@ -583,7 +606,10 @@
     div.addEventListener('touchcancel', cancelPress);
 
     div.onclick = (e) => {
-      if (!isPressing) loadChat(chat.id);
+      if (!isPressing) {
+        cancelMultiSelect(); // 切換聊天室時自動取消多選
+        loadChat(chat.id);
+      }
     };
     return div;
   }
@@ -689,7 +715,6 @@
       select.value = chat.folderId || 'none';
   }
 
-  // ==== 世界書分類邏輯 ====
   function createNewWbFolder() {
       const nameInput = document.getElementById('new-wb-folder-name');
       const name = nameInput.value.trim();
@@ -731,8 +756,6 @@
       wbFolders.forEach(f => { select.innerHTML += `<option value="${f.id}">${f.name}</option>`; });
   }
 
-  // =====================
-
   function createNewChat() {
     const newChat = {
       id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
@@ -740,6 +763,7 @@
     };
     chats.push(newChat);
     saveData();
+    cancelMultiSelect();
     loadChat(newChat.id);
   }
 
@@ -754,6 +778,7 @@
     
     chats.push(newChat);
     saveData();
+    cancelMultiSelect();
     loadChat(newChat.id);
     closeAllModals();
   }
@@ -807,12 +832,127 @@
     renderChatList();
   }
 
+  // ==== 訊息選項與多選邏輯 ====
+  function openMsgActionModal(index) {
+      document.getElementById('action-msg-index').value = index;
+      openModal('msg-action-modal');
+  }
+
+  function openEditModalFromAction() {
+      const index = document.getElementById('action-msg-index').value;
+      closeAllModals();
+      setTimeout(() => {
+          const chat = chats.find(c => c.id === currentChatId);
+          document.getElementById('edit-msg-index').value = index;
+          document.getElementById('edit-msg-content').value = chat.messages[index].content;
+          openModal('edit-msg-modal');
+      }, 150);
+  }
+
+  function copyMessage() {
+      const index = document.getElementById('action-msg-index').value;
+      const chat = chats.find(c => c.id === currentChatId);
+      const content = chat.messages[index].content;
+      
+      if (content.includes('<img')) {
+          alert("這條包含圖片，沒辦法直接複製成文字喔。");
+      } else {
+          navigator.clipboard.writeText(content).then(() => {
+              alert("已經複製到剪貼簿囉！");
+              closeAllModals();
+          }).catch(err => {
+              alert("複製失敗了：" + err);
+          });
+      }
+  }
+
+  function branchChatBackward() {
+      const index = parseInt(document.getElementById('action-msg-index').value);
+      const chatToClone = chats.find(c => c.id === currentChatId);
+      const newChat = JSON.parse(JSON.stringify(chatToClone));
+      
+      newChat.id = Date.now();
+      newChat.title = newChat.title + ' (前半段分支)';
+      newChat.messages = chatToClone.messages.slice(0, index + 1);
+      
+      chats.push(newChat);
+      saveData();
+      cancelMultiSelect();
+      loadChat(newChat.id);
+      closeAllModals();
+  }
+
+  function branchChatForward() {
+      const index = parseInt(document.getElementById('action-msg-index').value);
+      const chatToClone = chats.find(c => c.id === currentChatId);
+      const newChat = JSON.parse(JSON.stringify(chatToClone));
+      
+      newChat.id = Date.now();
+      newChat.title = newChat.title + ' (後半段分支)';
+      newChat.messages = chatToClone.messages.slice(index);
+      
+      chats.push(newChat);
+      saveData();
+      cancelMultiSelect();
+      loadChat(newChat.id);
+      closeAllModals();
+  }
+
+  function enableMultiSelectMode() {
+      isMultiSelectMode = true;
+      selectedMsgIndices.clear();
+      closeAllModals();
+      renderAllMessages();
+  }
+
+  function cancelMultiSelect() {
+      isMultiSelectMode = false;
+      selectedMsgIndices.clear();
+      renderAllMessages();
+  }
+
+  function toggleMsgSelection(index) {
+      if (selectedMsgIndices.has(index)) {
+          selectedMsgIndices.delete(index);
+      } else {
+          selectedMsgIndices.add(index);
+      }
+      renderAllMessages();
+  }
+
+  function deleteSelectedMessages() {
+      if (selectedMsgIndices.size === 0) return alert("還沒選取任何訊息喔。");
+      if (confirm(`確定要刪除這 ${selectedMsgIndices.size} 條訊息嗎？`)) {
+          const chat = chats.find(c => c.id === currentChatId);
+          const indicesToDelete = Array.from(selectedMsgIndices).sort((a, b) => b - a);
+          indicesToDelete.forEach(idx => {
+              chat.messages.splice(idx, 1);
+          });
+          
+          isMultiSelectMode = false;
+          selectedMsgIndices.clear();
+          saveData();
+          renderAllMessages();
+          checkAutoBackup();
+      }
+  }
+
   function renderAllMessages() {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
     const msgContainer = document.getElementById('messages');
     msgContainer.innerHTML = '';
     
+    // 切換底部工具列
+    if (isMultiSelectMode) {
+        document.getElementById('input-area').style.display = 'none';
+        document.getElementById('multi-select-toolbar').style.display = 'flex';
+        document.getElementById('multi-select-count').innerText = `已選擇 ${selectedMsgIndices.size} 條訊息`;
+    } else {
+        document.getElementById('input-area').style.display = 'flex';
+        document.getElementById('multi-select-toolbar').style.display = 'none';
+    }
+
     const defaultAvatarHtml = `<div class="ai-avatar"></div>`;
     const customAvatarHtml = `<img src="${chat.aiAvatar}" class="ai-avatar">`;
     const finalAvatarHtml = chat.aiAvatar ? customAvatarHtml : defaultAvatarHtml;
@@ -829,6 +969,25 @@
         const wrapper = document.createElement('div');
         wrapper.className = `msg-wrapper ${m.sender === 'user' ? 'user-wrapper' : 'ai-wrapper'}`;
         
+        // 多選模式下的選取樣式
+        if (isMultiSelectMode && selectedMsgIndices.has(index)) {
+            wrapper.style.backgroundColor = "rgba(216, 191, 216, 0.3)";
+            wrapper.style.borderRadius = "12px";
+            wrapper.style.padding = "5px";
+        }
+        
+        // 多選方塊
+        if (isMultiSelectMode) {
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = selectedMsgIndices.has(index);
+            cb.style.cssText = "width:18px; height:18px; margin: 0 10px; cursor:pointer; flex-shrink:0;";
+            cb.onclick = (e) => { e.stopPropagation(); toggleMsgSelection(index); };
+            
+            if (m.sender === 'user') wrapper.appendChild(cb);
+            else wrapper.insertBefore(cb, wrapper.firstChild);
+        }
+
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ${m.sender}`;
         
@@ -844,24 +1003,30 @@
           msgDiv.innerHTML = `${finalAvatarHtml}<div style="flex:1;">${formattedContent}</div>`;
         }
 
-        let pressTimer;
-        const startPress = () => { pressTimer = setTimeout(() => openEditModal(index), 600); };
-        const cancelPress = () => { clearTimeout(pressTimer); };
+        if (isMultiSelectMode) {
+            msgDiv.onclick = () => toggleMsgSelection(index);
+            wrapper.appendChild(msgDiv);
+        } else {
+            let pressTimer;
+            const startPress = () => { pressTimer = setTimeout(() => openMsgActionModal(index), 600); };
+            const cancelPress = () => { clearTimeout(pressTimer); };
+            
+            msgDiv.addEventListener('mousedown', startPress);
+            msgDiv.addEventListener('mouseup', cancelPress);
+            msgDiv.addEventListener('mouseleave', cancelPress);
+            msgDiv.addEventListener('touchstart', startPress);
+            msgDiv.addEventListener('touchend', cancelPress);
+            msgDiv.addEventListener('touchcancel', cancelPress);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'del-btn';
+            delBtn.innerText = '✕';
+            delBtn.onclick = () => deleteMessage(index);
+
+            wrapper.appendChild(msgDiv);
+            wrapper.appendChild(delBtn);
+        }
         
-        msgDiv.addEventListener('mousedown', startPress);
-        msgDiv.addEventListener('mouseup', cancelPress);
-        msgDiv.addEventListener('mouseleave', cancelPress);
-        msgDiv.addEventListener('touchstart', startPress);
-        msgDiv.addEventListener('touchend', cancelPress);
-        msgDiv.addEventListener('touchcancel', cancelPress);
-
-        const delBtn = document.createElement('button');
-        delBtn.className = 'del-btn';
-        delBtn.innerText = '✕';
-        delBtn.onclick = () => deleteMessage(index);
-
-        wrapper.appendChild(msgDiv);
-        wrapper.appendChild(delBtn);
         msgContainer.appendChild(wrapper);
       });
     }
@@ -1181,18 +1346,9 @@
   }
 
   function deleteMessage(index) {
-    if(confirm("確定要刪除這則訊息嗎？")) {
-      const chat = chats.find(c => c.id === currentChatId);
-      chat.messages.splice(index, 1);
-      saveData(); renderAllMessages(); checkAutoBackup();
-    }
-  }
-
-  function openEditModal(index) {
     const chat = chats.find(c => c.id === currentChatId);
-    document.getElementById('edit-msg-index').value = index;
-    document.getElementById('edit-msg-content').value = chat.messages[index].content;
-    openModal('edit-msg-modal');
+    chat.messages.splice(index, 1);
+    saveData(); renderAllMessages(); checkAutoBackup();
   }
 
   function saveEditedMessage() {
