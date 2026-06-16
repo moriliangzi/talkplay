@@ -282,6 +282,7 @@
 
   <div id="messages"></div>
 
+  <!-- 一般輸入區 -->
   <div id="input-area">
     <input type="file" id="image-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
     <button class="upload-btn" onclick="document.getElementById('image-upload').click()">+</button>
@@ -290,6 +291,7 @@
     <button id="fake-send-btn" onclick="sendFakeMessage()">發送</button>
   </div>
 
+  <!-- 多選模式工具列 -->
   <div id="multi-select-toolbar">
     <span id="multi-select-count" style="color:#666; font-size:14px; font-weight:bold;">已選擇 0 條訊息</span>
     <div style="display:flex; gap:10px;">
@@ -301,6 +303,7 @@
 
 <div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
 
+<!-- 對話選項視窗 (左側清單長按用) -->
 <div class="modal" id="chat-action-modal">
   <h3 style="margin-top:0;">對話選項</h3>
   <p id="chat-action-title" style="color:#666; margin-bottom:20px; font-size:14px;"></p>
@@ -310,6 +313,7 @@
   <button class="close-btn" onclick="closeAllModals()">取消</button>
 </div>
 
+<!-- 訊息選項視窗 (單句訊息長按用) -->
 <div class="modal" id="msg-action-modal">
   <h3 style="margin-top:0;">訊息選項</h3>
   <input type="hidden" id="action-msg-index">
@@ -321,6 +325,7 @@
   <button class="close-btn" onclick="closeAllModals()">取消</button>
 </div>
 
+<!-- 編輯訊息視窗 -->
 <div class="modal" id="edit-msg-modal">
   <h3 style="margin-top:0;">編輯訊息</h3>
   <input type="hidden" id="edit-msg-index">
@@ -331,6 +336,7 @@
   <button class="close-btn" onclick="closeAllModals()">取消</button>
 </div>
 
+<!-- API 設定 -->
 <div class="modal" id="api-modal">
   <h3 style="margin-top:0;">API 設定</h3>
   <div class="setting-item">
@@ -357,6 +363,7 @@
   <button class="close-btn" onclick="saveApiSettings()">儲存並關閉</button>
 </div>
 
+<!-- 對話資料夾管理 -->
 <div class="modal" id="folder-manager-modal">
   <h3 style="margin-top:0;">對話資料夾管理</h3>
   <div class="setting-item">
@@ -370,6 +377,7 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
+<!-- 世界書資料夾管理 -->
 <div class="modal" id="wb-folder-manager-modal">
   <h3 style="margin-top:0;">世界書分類管理</h3>
   <div class="setting-item">
@@ -383,6 +391,7 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">返回世界書管理</button>
 </div>
 
+<!-- 世界書管理 -->
 <div class="modal" id="worldbook-modal">
   <h3 style="margin-top:0;">世界書管理</h3>
   <input type="hidden" id="editing-wb-id" value="">
@@ -403,8 +412,10 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
+<!-- 備份與雲端管理 -->
 <div class="modal" id="backup-modal">
   <h3 style="margin-top:0;">全機備份與雲端</h3>
+  
   <div class="setting-item" style="margin-bottom:20px;">
     <label style="color:#666;">本地實體備份</label>
     <div style="display:flex; gap:10px;">
@@ -438,6 +449,7 @@
   <button class="close-btn" onclick="saveGistSettingsAndClose()" style="margin-top:20px;">儲存並關閉</button>
 </div>
 
+<!-- 對話設定 -->
 <div class="modal" id="chat-settings-modal">
   <h3 style="margin-top:0;">當前對話設定</h3>
   <div class="setting-item">
@@ -607,7 +619,7 @@
 
     div.onclick = (e) => {
       if (!isPressing) {
-        cancelMultiSelect(); // 切換聊天室時自動取消多選
+        cancelMultiSelect();
         loadChat(chat.id);
       }
     };
@@ -832,7 +844,6 @@
     renderChatList();
   }
 
-  // ==== 訊息選項與多選邏輯 ====
   function openMsgActionModal(index) {
       document.getElementById('action-msg-index').value = index;
       openModal('msg-action-modal');
@@ -902,13 +913,13 @@
       isMultiSelectMode = true;
       selectedMsgIndices.clear();
       closeAllModals();
-      renderAllMessages();
+      renderAllMessages(true);
   }
 
   function cancelMultiSelect() {
       isMultiSelectMode = false;
       selectedMsgIndices.clear();
-      renderAllMessages();
+      renderAllMessages(true);
   }
 
   function toggleMsgSelection(index) {
@@ -917,7 +928,7 @@
       } else {
           selectedMsgIndices.add(index);
       }
-      renderAllMessages();
+      renderAllMessages(true);
   }
 
   function deleteSelectedMessages() {
@@ -932,18 +943,21 @@
           isMultiSelectMode = false;
           selectedMsgIndices.clear();
           saveData();
-          renderAllMessages();
+          renderAllMessages(true);
           checkAutoBackup();
       }
   }
 
-  function renderAllMessages() {
+  function renderAllMessages(preserveScroll = false) {
     const chat = chats.find(c => c.id === currentChatId);
     if(!chat) return;
     const msgContainer = document.getElementById('messages');
+    
+    // 記下原本的滾動位置
+    const oldScrollTop = msgContainer.scrollTop;
+    
     msgContainer.innerHTML = '';
     
-    // 切換底部工具列
     if (isMultiSelectMode) {
         document.getElementById('input-area').style.display = 'none';
         document.getElementById('multi-select-toolbar').style.display = 'flex';
@@ -969,14 +983,12 @@
         const wrapper = document.createElement('div');
         wrapper.className = `msg-wrapper ${m.sender === 'user' ? 'user-wrapper' : 'ai-wrapper'}`;
         
-        // 多選模式下的選取樣式
         if (isMultiSelectMode && selectedMsgIndices.has(index)) {
             wrapper.style.backgroundColor = "rgba(216, 191, 216, 0.3)";
             wrapper.style.borderRadius = "12px";
             wrapper.style.padding = "5px";
         }
         
-        // 多選方塊
         if (isMultiSelectMode) {
             const cb = document.createElement('input');
             cb.type = 'checkbox';
@@ -1030,7 +1042,13 @@
         msgContainer.appendChild(wrapper);
       });
     }
-    msgContainer.scrollTop = msgContainer.scrollHeight;
+    
+    // 如果是設定保留捲動位置，就把高度還原；否則滾到底部
+    if (preserveScroll || isMultiSelectMode) {
+        msgContainer.scrollTop = oldScrollTop;
+    } else {
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
   }
 
   function handleKeyPress(e) { if (e.key === 'Enter') sendFakeMessage(); }
@@ -1346,9 +1364,18 @@
   }
 
   function deleteMessage(index) {
+    if(confirm("確定要刪除這則訊息嗎？")) {
+      const chat = chats.find(c => c.id === currentChatId);
+      chat.messages.splice(index, 1);
+      saveData(); renderAllMessages(true); checkAutoBackup();
+    }
+  }
+
+  function openEditModal(index) {
     const chat = chats.find(c => c.id === currentChatId);
-    chat.messages.splice(index, 1);
-    saveData(); renderAllMessages(); checkAutoBackup();
+    document.getElementById('edit-msg-index').value = index;
+    document.getElementById('edit-msg-content').value = chat.messages[index].content;
+    openModal('edit-msg-modal');
   }
 
   function saveEditedMessage() {
@@ -1357,7 +1384,7 @@
     const chat = chats.find(c => c.id === currentChatId);
     if(newContent.trim() !== '') {
       chat.messages[index].content = newContent;
-      saveData(); renderAllMessages(); checkAutoBackup();
+      saveData(); renderAllMessages(true); checkAutoBackup();
     }
     closeAllModals();
   }
