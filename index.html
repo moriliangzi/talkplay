@@ -155,7 +155,6 @@
     user-select: none;
   }
   
-  /* 讓格式化文字更美觀 */
   .msg strong { font-weight: 800; }
   .msg em { font-style: italic; opacity: 0.9; }
   .msg del { opacity: 0.6; }
@@ -258,7 +257,7 @@
   <div class="chat-list-header">
     <span>我的對話清單</span>
     <div class="add-btn-group">
-      <button title="資料夾管理" onclick="openModal('folder-manager-modal')">📁</button>
+      <button title="對話資料夾管理" onclick="openModal('folder-manager-modal')">📁</button>
       <button title="新增對話" onclick="createNewChat()">＋</button>
     </div>
   </div>
@@ -285,7 +284,6 @@
 
 <div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
 
-<!-- 對話選項視窗 -->
 <div class="modal" id="chat-action-modal">
   <h3 style="margin-top:0;">對話選項</h3>
   <p id="chat-action-title" style="color:#666; margin-bottom:20px; font-size:14px;"></p>
@@ -295,7 +293,6 @@
   <button class="close-btn" onclick="closeAllModals()">取消</button>
 </div>
 
-<!-- API 設定 -->
 <div class="modal" id="api-modal">
   <h3 style="margin-top:0;">API 設定</h3>
   <div class="setting-item">
@@ -322,9 +319,8 @@
   <button class="close-btn" onclick="saveApiSettings()">儲存並關閉</button>
 </div>
 
-<!-- 資料夾管理 -->
 <div class="modal" id="folder-manager-modal">
-  <h3 style="margin-top:0;">資料夾分類管理</h3>
+  <h3 style="margin-top:0;">對話資料夾管理</h3>
   <div class="setting-item">
     <label>新增資料夾名稱</label>
     <div style="display: flex; gap: 8px;">
@@ -336,10 +332,26 @@
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
-<!-- 世界書管理 -->
+<div class="modal" id="wb-folder-manager-modal">
+  <h3 style="margin-top:0;">世界書分類管理</h3>
+  <div class="setting-item">
+    <label>新增分類名稱</label>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="new-wb-folder-name" placeholder="例如：地點背景" style="flex: 1;">
+      <button onclick="createNewWbFolder()" style="padding: 0 15px; background: #e6e6fa; border: none; border-radius: 8px; cursor: pointer; color: #555; font-size: 13px; white-space: nowrap;">建立</button>
+    </div>
+  </div>
+  <div id="wb-folder-list" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;"></div>
+  <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">返回世界書管理</button>
+</div>
+
 <div class="modal" id="worldbook-modal">
   <h3 style="margin-top:0;">世界書管理</h3>
   <input type="hidden" id="editing-wb-id" value="">
+  <div class="setting-item">
+    <label>所屬分類 <button onclick="openModal('wb-folder-manager-modal')" style="background:none; border:none; color:#d8bfd8; cursor:pointer; font-weight:bold; float:right;">⚙️ 管理分類</button></label>
+    <select id="wb-folder-select"></select>
+  </div>
   <div class="setting-item">
     <label>世界書名稱</label>
     <input type="text" id="wb-name" placeholder="例如：現代都市背景">
@@ -348,12 +360,11 @@
     <label>世界觀內容與規則</label>
     <textarea id="wb-content" rows="4" placeholder="在這裡設定世界的規則、背景..."></textarea>
   </div>
-  <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveWorldbook()">儲存 / 更新此世界書</button>
+  <button class="close-btn" style="background:#d8bfd8; color:#fff;" onclick="saveWorldbook()">儲存 / 更新此設定</button>
   <div id="wb-list" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;"></div>
   <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
 </div>
 
-<!-- 備份與雲端管理 -->
 <div class="modal" id="backup-modal">
   <h3 style="margin-top:0;">全機備份與雲端</h3>
   
@@ -390,7 +401,6 @@
   <button class="close-btn" onclick="saveGistSettingsAndClose()" style="margin-top:20px;">儲存並關閉</button>
 </div>
 
-<!-- 對話設定 -->
 <div class="modal" id="chat-settings-modal">
   <h3 style="margin-top:0;">當前對話設定</h3>
   <div class="setting-item">
@@ -398,7 +408,7 @@
     <input type="text" id="chat-name-input" placeholder="輸入新的對話名稱">
   </div>
   <div class="setting-item">
-    <label>所屬資料夾</label>
+    <label>所屬對話資料夾</label>
     <select id="chat-folder-select"></select>
   </div>
   <div class="setting-item">
@@ -422,7 +432,7 @@
   </div>
   <div class="setting-item">
     <label>連接世界書 (可多選)</label>
-    <div id="wb-checkbox-list" style="max-height: 120px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
+    <div id="wb-checkbox-list" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
   </div>
   <div class="setting-item">
     <label>對方頭像</label>
@@ -444,7 +454,6 @@
   <button class="close-btn" onclick="saveChatSettings()">套用並關閉</button>
 </div>
 
-<!-- 編輯訊息視窗 -->
 <div class="modal" id="edit-msg-modal">
   <h3 style="margin-top:0;">編輯訊息</h3>
   <input type="hidden" id="edit-msg-index">
@@ -459,6 +468,7 @@
   let chats = [];
   let worldbooks = [];
   let folders = [];
+  let wbFolders = []; // 新增：世界書的資料夾陣列
   let apiSettings = { url: '', key: '', model: 'gpt-3.5-turbo' };
   let gistSettings = { token: '', gistId: '', autoBackup: false };
   let currentChatId = null;
@@ -476,6 +486,7 @@
     chats = await localforage.getItem('myChats') || [];
     worldbooks = await localforage.getItem('myWorldbooks') || [];
     folders = await localforage.getItem('myFolders') || [];
+    wbFolders = await localforage.getItem('myWbFolders') || [];
     apiSettings = await localforage.getItem('myApiSettings') || { url: '', key: '', model: 'gpt-3.5-turbo' };
     gistSettings = await localforage.getItem('myGistSettings') || { token: '', gistId: '', autoBackup: false };
 
@@ -499,6 +510,10 @@
       if (!c.aiTextColor) c.aiTextColor = '#333333';
     });
 
+    worldbooks.forEach(w => {
+      if (w.folderId === undefined) w.folderId = null;
+    });
+
     currentChatId = chats[0].id;
 
     document.getElementById('api-url').value = apiSettings.url || '';
@@ -514,7 +529,6 @@
     loadChat(currentChatId);
   }
 
-  // 取得隨機的 API Key (支援逗號分隔)
   function getRandomKey(keyStr) {
     if (!keyStr) return '';
     if (keyStr.includes(',')) {
@@ -524,17 +538,12 @@
     return keyStr;
   }
 
-  // Markdown 格式轉換函數
   function parseMarkdown(text) {
     if (!text) return '';
     let html = text;
-    // 粗斜體 ***字***
     html = html.replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    // 粗體 **字**
     html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
-    // 斜體 *字*
     html = html.replace(/\*([\s\S]*?)\*/g, '<em>$1</em>');
-    // 刪除線 ~~字~~
     html = html.replace(/~~([\s\S]*?)~~/g, '<del>$1</del>');
     return html;
   }
@@ -574,29 +583,21 @@
   function renderChatList() {
     const container = document.getElementById('chat-list-container');
     container.innerHTML = '';
-    
     const validFolderIds = folders.map(f => f.id);
     
     folders.forEach(folder => {
         const folderDiv = document.createElement('div');
-        
         const header = document.createElement('div');
         header.className = 'folder-header';
         header.innerHTML = `<span style="margin-right:5px; width:12px; display:inline-block;">${folder.isOpen ? '▼' : '▶'}</span> 📁 ${folder.name}`;
-        header.onclick = () => {
-            folder.isOpen = !folder.isOpen;
-            saveData();
-            renderChatList();
-        };
+        header.onclick = () => { folder.isOpen = !folder.isOpen; saveData(); renderChatList(); };
         
         const chatsContainer = document.createElement('div');
         chatsContainer.className = 'folder-chats';
         chatsContainer.style.display = folder.isOpen ? 'block' : 'none';
         
         const folderChats = chats.filter(c => c.folderId === folder.id);
-        folderChats.forEach(chat => {
-            chatsContainer.appendChild(createChatElement(chat));
-        });
+        folderChats.forEach(chat => { chatsContainer.appendChild(createChatElement(chat)); });
         
         folderDiv.appendChild(header);
         folderDiv.appendChild(chatsContainer);
@@ -611,9 +612,7 @@
             sep.innerText = "未分類對話";
             container.appendChild(sep);
         }
-        unassignedChats.forEach(chat => {
-            container.appendChild(createChatElement(chat));
-        });
+        unassignedChats.forEach(chat => { container.appendChild(createChatElement(chat)); });
     }
   }
 
@@ -621,16 +620,8 @@
       const nameInput = document.getElementById('new-folder-name');
       const name = nameInput.value.trim();
       if (!name) return alert('請輸入資料夾名稱喔。');
-      
-      folders.push({
-          id: 'f_' + Date.now(),
-          name: name,
-          isOpen: true
-      });
-      nameInput.value = '';
-      saveData();
-      renderFolderManagerList();
-      renderChatList();
+      folders.push({ id: 'f_' + Date.now(), name: name, isOpen: true });
+      nameInput.value = ''; saveData(); renderFolderManagerList(); renderChatList();
   }
 
   function renderFolderManagerList() {
@@ -656,21 +647,61 @@
       if(confirm('確定要刪除這個資料夾嗎？裡面的對話不會不見，會被移到未分類區。')) {
           folders = folders.filter(f => f.id !== id);
           chats.forEach(c => { if(c.folderId === id) c.folderId = null; });
-          saveData();
-          renderFolderManagerList();
-          renderChatList();
+          saveData(); renderFolderManagerList(); renderChatList();
       }
   }
 
   function renderFolderSelect() {
       const select = document.getElementById('chat-folder-select');
       select.innerHTML = '<option value="none">-- 不使用資料夾 (未分類) --</option>';
-      folders.forEach(f => {
-          select.innerHTML += `<option value="${f.id}">${f.name}</option>`;
-      });
+      folders.forEach(f => { select.innerHTML += `<option value="${f.id}">${f.name}</option>`; });
       const chat = chats.find(c => c.id === currentChatId);
       select.value = chat.folderId || 'none';
   }
+
+  // ==== 世界書分類邏輯 ====
+  function createNewWbFolder() {
+      const nameInput = document.getElementById('new-wb-folder-name');
+      const name = nameInput.value.trim();
+      if (!name) return alert('請輸入分類名稱喔。');
+      wbFolders.push({ id: 'wbf_' + Date.now(), name: name, isOpen: true });
+      nameInput.value = ''; saveData(); renderWbFolderManagerList(); renderWorldbookList(); renderWbFolderSelect();
+  }
+
+  function renderWbFolderManagerList() {
+      const list = document.getElementById('wb-folder-list');
+      list.innerHTML = '';
+      if (wbFolders.length === 0) {
+          list.innerHTML = '<div style="color:#aaa; font-size:13px;">尚未建立任何世界書分類</div>';
+          return;
+      }
+      wbFolders.forEach(f => {
+          list.innerHTML += `
+            <div class="list-item">
+              <span class="list-item-title">📁 ${f.name}</span>
+              <div class="list-item-btns">
+                <button class="btn-delete" onclick="deleteWbFolder('${f.id}')">刪除</button>
+              </div>
+            </div>
+          `;
+      });
+  }
+
+  function deleteWbFolder(id) {
+      if(confirm('確定要刪除這個分類嗎？裡面的世界書會被移到未分類區。')) {
+          wbFolders = wbFolders.filter(f => f.id !== id);
+          worldbooks.forEach(w => { if(w.folderId === id) w.folderId = null; });
+          saveData(); renderWbFolderManagerList(); renderWorldbookList(); renderWbFolderSelect();
+      }
+  }
+
+  function renderWbFolderSelect() {
+      const select = document.getElementById('wb-folder-select');
+      select.innerHTML = '<option value="none">-- 不使用分類 (未分類) --</option>';
+      wbFolders.forEach(f => { select.innerHTML += `<option value="${f.id}">${f.name}</option>`; });
+  }
+
+  // =====================
 
   function createNewChat() {
     const newChat = {
@@ -678,30 +709,24 @@
       userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
     };
     chats.push(newChat);
-    saveData();
-    loadChat(newChat.id);
+    saveData(); loadChat(newChat.id);
   }
 
   function cloneChat() {
     const id = parseInt(document.getElementById('action-chat-id').value);
     const chatToClone = chats.find(c => c.id === id);
     if (!chatToClone) return;
-
     const newChat = JSON.parse(JSON.stringify(chatToClone));
     newChat.id = Date.now();
     newChat.title = newChat.title + ' (複製)';
-    
     chats.push(newChat);
-    saveData();
-    loadChat(newChat.id);
-    closeAllModals();
+    saveData(); loadChat(newChat.id); closeAllModals();
   }
 
   function confirmDeleteChat() {
     const id = parseInt(document.getElementById('action-chat-id').value);
     if (confirm("確定要刪除這個對話嗎？刪除後無法恢復喔。")) {
-      deleteChat(id);
-      closeAllModals();
+      deleteChat(id); closeAllModals();
     }
   }
 
@@ -735,15 +760,12 @@
     
     const avatarPreview = document.getElementById('ai-avatar-preview');
     if(chat.aiAvatar) {
-      avatarPreview.src = chat.aiAvatar;
-      avatarPreview.style.display = 'block';
+      avatarPreview.src = chat.aiAvatar; avatarPreview.style.display = 'block';
     } else {
-      avatarPreview.style.display = 'none';
-      avatarPreview.src = '';
+      avatarPreview.style.display = 'none'; avatarPreview.src = '';
     }
     
-    renderAllMessages();
-    renderChatList();
+    renderAllMessages(); renderChatList();
   }
 
   function renderAllMessages() {
@@ -771,7 +793,6 @@
         const msgDiv = document.createElement('div');
         msgDiv.className = `msg ${m.sender}`;
         
-        // 透過 Markdown 轉換器解析內容
         const formattedContent = parseMarkdown(m.content);
 
         if (m.sender === 'user') {
@@ -936,8 +957,8 @@
 
   function getBackupPayload() {
     return {
-      appName: "EPhone_Roleplay_Backup", version: 2,
-      apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, chats: chats
+      appName: "EPhone_Roleplay_Backup", version: 3,
+      apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders, chats: chats
     };
   }
 
@@ -1003,12 +1024,14 @@
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
             folders = importedData.folders || [];
+            wbFolders = importedData.wbFolders || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
             currentChatId = chats[0] ? chats[0].id : Date.now();
             
             await localforage.setItem('myChats', chats);
             await localforage.setItem('myWorldbooks', worldbooks);
             await localforage.setItem('myFolders', folders);
+            await localforage.setItem('myWbFolders', wbFolders);
             await localforage.setItem('myApiSettings', apiSettings);
             
             document.getElementById('api-url').value = apiSettings.url || '';
@@ -1068,11 +1091,13 @@
             chats = importedData.chats || [];
             worldbooks = importedData.worldbooks || [];
             folders = importedData.folders || [];
+            wbFolders = importedData.wbFolders || [];
             apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
             currentChatId = chats[0] ? chats[0].id : Date.now();
             await localforage.setItem('myChats', chats);
             await localforage.setItem('myWorldbooks', worldbooks);
             await localforage.setItem('myFolders', folders);
+            await localforage.setItem('myWbFolders', wbFolders);
             await localforage.setItem('myApiSettings', apiSettings);
             
             document.getElementById('api-url').value = apiSettings.url || '';
@@ -1147,11 +1172,15 @@
     const name = document.getElementById('wb-name').value.trim();
     const content = document.getElementById('wb-content').value.trim();
     if(!name) return alert('請輸入世界書名稱');
+    
+    const folderSelect = document.getElementById('wb-folder-select').value;
+    const assignedFolderId = folderSelect === 'none' ? null : folderSelect;
+
     if (idInput) {
       const wb = worldbooks.find(w => w.id === idInput);
-      if(wb) { wb.name = name; wb.content = content; }
+      if(wb) { wb.name = name; wb.content = content; wb.folderId = assignedFolderId; }
     } else {
-      worldbooks.push({ id: Date.now().toString(), name, content });
+      worldbooks.push({ id: Date.now().toString(), name, content, folderId: assignedFolderId });
     }
     saveData(); resetWorldbookForm(); renderWorldbookList(); renderWorldbookCheckboxes();
   }
@@ -1159,17 +1188,45 @@
   function renderWorldbookList() {
     const list = document.getElementById('wb-list');
     list.innerHTML = '';
-    worldbooks.forEach(wb => {
-      list.innerHTML += `
-        <div class="wb-item">
-          <span class="wb-item-title">${wb.name}</span>
-          <div class="wb-item-btns">
-            <button class="btn-edit" onclick="editWorldbook('${wb.id}')">編輯</button>
-            <button class="btn-delete" onclick="deleteWorldbook('${wb.id}')">刪除</button>
-          </div>
-        </div>
-      `;
+    const validFolderIds = wbFolders.map(f => f.id);
+
+    // 依分類渲染
+    wbFolders.forEach(folder => {
+        const folderWbs = worldbooks.filter(w => w.folderId === folder.id);
+        if (folderWbs.length > 0) {
+            list.innerHTML += `<div style="font-size:12px; color:#aaa; margin: 15px 0 5px 0; font-weight:bold;">📁 ${folder.name}</div>`;
+            folderWbs.forEach(wb => {
+                list.innerHTML += `
+                  <div class="list-item">
+                    <span class="list-item-title">${wb.name}</span>
+                    <div class="list-item-btns">
+                      <button class="btn-edit" onclick="editWorldbook('${wb.id}')">編輯</button>
+                      <button class="btn-delete" onclick="deleteWorldbook('${wb.id}')">刪除</button>
+                    </div>
+                  </div>
+                `;
+            });
+        }
     });
+
+    // 渲染未分類
+    const unassignedWbs = worldbooks.filter(w => !w.folderId || !validFolderIds.includes(w.folderId));
+    if (unassignedWbs.length > 0) {
+        if (wbFolders.length > 0) {
+            list.innerHTML += `<div style="font-size:12px; color:#aaa; margin: 15px 0 5px 0; font-weight:bold;">未分類世界書</div>`;
+        }
+        unassignedWbs.forEach(wb => {
+            list.innerHTML += `
+              <div class="list-item">
+                <span class="list-item-title">${wb.name}</span>
+                <div class="list-item-btns">
+                  <button class="btn-edit" onclick="editWorldbook('${wb.id}')">編輯</button>
+                  <button class="btn-delete" onclick="deleteWorldbook('${wb.id}')">刪除</button>
+                </div>
+              </div>
+            `;
+        });
+    }
   }
 
   function editWorldbook(id) {
@@ -1178,6 +1235,7 @@
       document.getElementById('editing-wb-id').value = wb.id;
       document.getElementById('wb-name').value = wb.name;
       document.getElementById('wb-content').value = wb.content;
+      document.getElementById('wb-folder-select').value = wb.folderId || 'none';
     }
   }
 
@@ -1195,6 +1253,7 @@
     document.getElementById('editing-wb-id').value = '';
     document.getElementById('wb-name').value = '';
     document.getElementById('wb-content').value = '';
+    document.getElementById('wb-folder-select').value = 'none';
   }
 
   function renderWorldbookCheckboxes() {
@@ -1205,15 +1264,40 @@
       list.innerHTML = '<span style="color:#aaa; font-size:13px;">尚未建立世界書</span>';
       return;
     }
-    worldbooks.forEach(wb => {
-      const isChecked = chat.worldbookIds.includes(wb.id) ? 'checked' : '';
-      list.innerHTML += `
-        <label style="display:flex; align-items:center; margin-bottom:8px; cursor:pointer; font-size:14px;">
-          <input type="checkbox" value="${wb.id}" class="wb-checkbox" ${isChecked} style="margin-right:8px; cursor:pointer;">
-          ${wb.name}
-        </label>
-      `;
+    
+    const validFolderIds = wbFolders.map(f => f.id);
+
+    wbFolders.forEach(folder => {
+        const folderWbs = worldbooks.filter(w => w.folderId === folder.id);
+        if (folderWbs.length > 0) {
+            list.innerHTML += `<div style="font-size:12px; color:#aaa; margin: 10px 0 5px 0; font-weight:bold;">📁 ${folder.name}</div>`;
+            folderWbs.forEach(wb => {
+                const isChecked = chat.worldbookIds.includes(wb.id) ? 'checked' : '';
+                list.innerHTML += `
+                  <label style="display:flex; align-items:center; margin-bottom:8px; cursor:pointer; font-size:14px; padding-left:10px;">
+                    <input type="checkbox" value="${wb.id}" class="wb-checkbox" ${isChecked} style="margin-right:8px; cursor:pointer;">
+                    ${wb.name}
+                  </label>
+                `;
+            });
+        }
     });
+
+    const unassignedWbs = worldbooks.filter(w => !w.folderId || !validFolderIds.includes(w.folderId));
+    if (unassignedWbs.length > 0) {
+        if (wbFolders.length > 0) {
+            list.innerHTML += `<div style="font-size:12px; color:#aaa; margin: 10px 0 5px 0; font-weight:bold;">未分類</div>`;
+        }
+        unassignedWbs.forEach(wb => {
+            const isChecked = chat.worldbookIds.includes(wb.id) ? 'checked' : '';
+            list.innerHTML += `
+              <label style="display:flex; align-items:center; margin-bottom:8px; cursor:pointer; font-size:14px; padding-left:10px;">
+                <input type="checkbox" value="${wb.id}" class="wb-checkbox" ${isChecked} style="margin-right:8px; cursor:pointer;">
+                ${wb.name}
+              </label>
+            `;
+        });
+    }
   }
 
   function saveChatSettings() {
@@ -1256,21 +1340,36 @@
     localforage.setItem('myChats', chats);
     localforage.setItem('myWorldbooks', worldbooks);
     localforage.setItem('myFolders', folders);
+    localforage.setItem('myWbFolders', wbFolders);
   }
 
   function openModal(modalId) {
     document.getElementById('overlay').style.display = 'block';
     document.getElementById(modalId).style.display = 'block';
     
-    if(modalId === 'worldbook-modal') resetWorldbookForm();
+    if(modalId === 'worldbook-modal') {
+        renderWbFolderSelect();
+        resetWorldbookForm();
+    }
     if(modalId === 'folder-manager-modal') renderFolderManagerList();
+    if(modalId === 'wb-folder-manager-modal') {
+        document.getElementById('worldbook-modal').style.display = 'none'; // 先藏起主視窗
+        renderWbFolderManagerList();
+    }
     if(modalId === 'backup-modal') {
       document.getElementById('gist-token').value = gistSettings.token || '';
       document.getElementById('gist-id').value = gistSettings.gistId || '';
       document.getElementById('auto-backup-gist').checked = gistSettings.autoBackup || false;
     }
   }
+  
   function closeAllModals() {
+    // 檢查是不是從世界書分類管理返回
+    if (document.getElementById('wb-folder-manager-modal').style.display === 'block') {
+        document.getElementById('wb-folder-manager-modal').style.display = 'none';
+        document.getElementById('worldbook-modal').style.display = 'block';
+        return;
+    }
     document.getElementById('overlay').style.display = 'none';
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
   }
