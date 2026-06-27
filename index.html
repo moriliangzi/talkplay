@@ -284,8 +284,8 @@
 
   <!-- 一般輸入區 -->
   <div id="input-area">
-    <input type="file" id="image-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
-    <button class="upload-btn" onclick="document.getElementById('image-upload').click()">+</button>
+    <input type="file" id="file-upload" accept="image/*,.txt,.md,.csv,.json" style="display:none;" onchange="handleFileUpload(event)">
+<button class="upload-btn" onclick="document.getElementById('file-upload').click()">+</button>
     <input type="text" id="user-input" class="chat-input" placeholder="說點什麼或傳送圖片..." onkeypress="handleKeyPress(event)" autocomplete="off">
     <button id="true-send-btn" onclick="sendTrueMessage()" title="呼叫回覆">呼叫</button>
     <button id="fake-send-btn" onclick="sendFakeMessage()">發送</button>
@@ -1150,10 +1150,27 @@
     const limit = parseInt(chat.contextLimit) || 30;
     const recentMessages = chat.messages.slice(-limit);
 
-    recentMessages.forEach(m => {
-      let cleanText = m.content.replace(/<img[^>]*>/g, "[傳送了一張圖片]");
-      apiMessages.push({ role: m.sender === 'user' ? "user" : "assistant", content: cleanText });
+        recentMessages.forEach(m => {
+      // 檢查對話中是否包含圖片的 Base64 碼
+      const imgMatch = m.content.match(/<img src="(data:image\/[^;]+;base64,[^"]+)"[^>]*>/);
+
+      if (imgMatch && m.sender === 'user') {
+        // 如果有圖片，改用陣列格式傳送 (GPT-4o, Gemini 支援的 Vision 格式)
+        const base64Data = imgMatch[1];
+        const textPart = m.content.replace(/<img[^>]*>/g, "").trim(); // 把圖片標籤濾掉，看有沒有附帶文字
+        
+        let messageContent = [];
+        if (textPart) messageContent.push({ type: "text", text: textPart });
+        messageContent.push({ type: "image_url", image_url: { url: base64Data } });
+
+        apiMessages.push({ role: "user", content: messageContent });
+      } else {
+        // 純文字或 AI 的回覆，維持一般格式
+        let cleanText = m.content.replace(/<img[^>]*>/g, "[對方傳送了一張圖片]");
+        apiMessages.push({ role: m.sender === 'user' ? "user" : "assistant", content: cleanText });
+      }
     });
+
 
     let fetchUrl = apiSettings.url.trim();
     if (fetchUrl.endsWith('/')) fetchUrl = fetchUrl.slice(0, -1);
@@ -1336,18 +1353,35 @@
     reader.readAsText(file); event.target.value = '';
   }
 
-  function handleImageUpload(event) {
+    function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
+    
+    const chat = chats.find(c => c.id === currentChatId);
     const reader = new FileReader();
-    reader.onload = function(e) {
-      const imgTag = `<img src="${e.target.result}" style="max-width:200px; border-radius:10px; display:block;">`;
-      const chat = chats.find(c => c.id === currentChatId);
-      chat.messages.push({ sender: 'user', content: imgTag });
-      saveData(); renderAllMessages(); checkAutoBackup();
-    };
-    reader.readAsDataURL(file); event.target.value = ''; 
+
+    // 如果是圖片，轉成 Base64 並顯示在畫面上
+    if (file.type.startsWith('image/')) {
+      reader.onload = function(e) {
+        const imgTag = `<img src="${e.target.result}" style="max-width:200px; border-radius:10px; display:block;" data-type="vision">`;
+        chat.messages.push({ sender: 'user', content: imgTag });
+        saveData(); renderAllMessages(true); checkAutoBackup();
+      };
+      reader.readAsDataURL(file);
+    } 
+    // 如果是文字類文件，直接把內容讀出來傳送
+    else {
+      reader.onload = function(e) {
+        const fileContent = e.target.result;
+        const fileMsg = `[上傳了文件：${file.name}]\n\n\`\`\`\n${fileContent}\n\`\`\``;
+        chat.messages.push({ sender: 'user', content: fileMsg });
+        saveData(); renderAllMessages(true); checkAutoBackup();
+      };
+      reader.readAsText(file); // 將檔案當作純文字讀取
+    }
+    event.target.value = ''; 
   }
+
 
   function handleAiAvatarUpload(event) {
     const file = event.target.files[0];
