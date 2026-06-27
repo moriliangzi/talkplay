@@ -884,7 +884,8 @@
       
       newChat.id = Date.now();
       newChat.title = newChat.title + ' (前半段分支)';
-      newChat.messages = chatToClone.messages.slice(0, index + 1);
+      // 修正：從已經深拷貝的 newChat 裡裁切，切斷與原對話的連結
+      newChat.messages = newChat.messages.slice(0, index + 1);
       
       chats.push(newChat);
       saveData();
@@ -900,7 +901,8 @@
       
       newChat.id = Date.now();
       newChat.title = newChat.title + ' (後半段分支)';
-      newChat.messages = chatToClone.messages.slice(index);
+      // 修正：從已經深拷貝的 newChat 裡裁切，切斷與原對話的連結
+      newChat.messages = newChat.messages.slice(index);
       
       chats.push(newChat);
       saveData();
