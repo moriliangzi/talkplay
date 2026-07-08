@@ -488,6 +488,10 @@
     <div id="linked-chat-list" style="max-height: 120px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
   </div>
   <div class="setting-item">
+    <label>跨聊天室記憶條數 (每個連動對話抓取最近幾句)</label>
+    <input type="number" id="linked-context-limit-input" placeholder="例如：15" min="1" max="100">
+  </div>
+  <div class="setting-item">
     <label>對方頭像</label>
     <input type="file" id="ai-avatar-upload" accept="image/*" onchange="handleAiAvatarUpload(event)" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px;">
@@ -539,7 +543,7 @@
 
     if (chats.length === 0) {
       chats.push({ 
-        id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], linkedChatIds: [],
+        id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], linkedChatIds: [], linkedContextLimit: 15,
         userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
         userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
       });
@@ -550,6 +554,7 @@
       if (c.worldbookId) { c.worldbookIds = [c.worldbookId]; delete c.worldbookId; }
       if (!c.worldbookIds) c.worldbookIds = [];
       if (!c.linkedChatIds) c.linkedChatIds = []; // 新增的資料欄位
+      if (c.linkedContextLimit === undefined) c.linkedContextLimit = 15; // 新增的記憶條數
       if (c.contextLimit === undefined) c.contextLimit = 30;
       if (c.folderId === undefined) c.folderId = null;
       if (!c.userBgColor) c.userBgColor = '#e6e6fa';
@@ -774,7 +779,7 @@
 
   function createNewChat() {
     const newChat = {
-      id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], linkedChatIds: [],
+      id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], linkedChatIds: [], linkedContextLimit: 15,
       userPrompt: '', charPrompt: '', aiAvatar: null, contextLimit: 30, messages: [],
       userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333'
     };
@@ -837,6 +842,7 @@
     renderFolderSelect();
     renderWorldbookCheckboxes();
     renderLinkedChatCheckboxes(); // 新增的呼叫
+    document.getElementById('linked-context-limit-input').value = chat.linkedContextLimit || 15; // 讀取記憶條數
     
     const avatarPreview = document.getElementById('ai-avatar-preview');
     if(chat.aiAvatar) {
@@ -1175,8 +1181,9 @@
         const linkedChat = chats.find(c => c.id === linkedId);
         if (linkedChat && linkedChat.messages.length > 0) {
           systemContent += `[場景記憶：${linkedChat.title}]\n`;
-          // 只抓取隔壁聊天室最近的 15 句話，避免記憶體爆炸
-          const recentLinked = linkedChat.messages.slice(-15);
+          // 讀取妳設定的條數，預設是 15
+          const linkedLimit = parseInt(chat.linkedContextLimit) || 15;
+          const recentLinked = linkedChat.messages.slice(-linkedLimit);
           recentLinked.forEach(m => {
              // 簡單濾掉對話裡的 HTML 標籤跟圖片，只留純文字給 AI 當記憶
              let cleanText = m.content.replace(/<img[^>]*>/g, "[圖片]").replace(/<[^>]*>/g, ""); 
@@ -1662,6 +1669,8 @@
     // 新增的連動記憶儲存邏輯
     const selectedLinkedChats = Array.from(document.querySelectorAll('.linked-chat-checkbox:checked')).map(cb => parseInt(cb.value));
     chat.linkedChatIds = selectedLinkedChats;
+    const linkedLimitInput = parseInt(document.getElementById('linked-context-limit-input').value);
+    chat.linkedContextLimit = isNaN(linkedLimitInput) ? 15 : linkedLimitInput;
 
     chat.userPrompt = document.getElementById('user-prompt').value;
     chat.charPrompt = document.getElementById('char-prompt').value;
