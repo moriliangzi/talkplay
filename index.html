@@ -265,6 +265,12 @@
   }
   .btn-edit { background: #e6e6fa; color: #555; }
   .btn-delete { background: #ffe4e1; color: #c0392b; }
+
+  .search-result-item { padding: 10px; background: #f9f9f9; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; }
+  .search-result-item:hover { background: #f0f0f0; border-color: #d8bfd8; }
+  .search-result-chat { font-size: 12px; color: #888; font-weight: bold; margin-bottom: 4px; }
+  .search-result-msg { font-size: 14px; color: #333; word-break: break-all; }
+  .search-highlight { color: #c0392b; font-weight: bold; background: #ffe4e1; padding: 0 2px; border-radius: 2px; }
 </style>
 </head>
 <body>
@@ -277,6 +283,7 @@
   <div class="chat-list-header">
     <span>我的對話清單</span>
     <div class="add-btn-group">
+      <button title="搜尋對話" onclick="openModal('search-modal')">🔍</button>
       <button title="對話資料夾管理" onclick="openModal('folder-manager-modal')">📁</button>
       <button title="新增對話" onclick="createNewChat()">＋</button>
     </div>
@@ -311,6 +318,17 @@
 </div>
 
 <div class="modal-overlay" id="overlay" onclick="closeAllModals()"></div>
+
+<div class="modal" id="search-modal">
+  <h3 style="margin-top:0;">🔍 搜尋所有對話</h3>
+  <div class="setting-item">
+    <input type="text" id="search-keyword" placeholder="輸入關鍵字 (打字會自動搜尋)..." oninput="performSearch()">
+  </div>
+  <div id="search-results" style="max-height: 350px; overflow-y: auto; border-top: 1px solid #eee; padding-top: 10px;">
+    <div style="color:#aaa; font-size:13px;">請在上方輸入想尋找的對話內容...</div>
+  </div>
+  <button class="close-btn" onclick="closeAllModals()" style="margin-top:15px;">關閉</button>
+</div>
 
 <div class="modal" id="chat-action-modal">
   <h3 style="margin-top:0;">對話選項</h3>
@@ -1719,6 +1737,10 @@
       document.getElementById('gist-id').value = gistSettings.gistId || '';
       document.getElementById('auto-backup-gist').checked = gistSettings.autoBackup || false;
     }
+    if(modalId === 'search-modal') {
+        document.getElementById('search-keyword').value = '';
+        document.getElementById('search-results').innerHTML = '<div style="color:#aaa; font-size:13px;">請在上方輸入想尋找的對話內容...</div>';
+    }
   }
   
   function closeAllModals() {
@@ -1729,6 +1751,89 @@
     }
     document.getElementById('overlay').style.display = 'none';
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+  }
+
+  // 執行搜尋功能
+  function performSearch() {
+    const keyword = document.getElementById('search-keyword').value.toLowerCase().trim();
+    const resultsContainer = document.getElementById('search-results');
+    resultsContainer.innerHTML = '';
+    
+    if (!keyword) {
+      resultsContainer.innerHTML = '<div style="color:#aaa; font-size:13px;">請在上方輸入想尋找的對話內容...</div>';
+      return;
+    }
+
+    let resultsCount = 0;
+    chats.forEach(chat => {
+      chat.messages.forEach((msg, index) => {
+        // 濾掉圖片與 HTML 標籤，只搜純文字
+        const cleanContent = msg.content.replace(/<[^>]*>?/gm, ''); 
+        if (cleanContent.toLowerCase().includes(keyword)) {
+          resultsCount++;
+          const item = document.createElement('div');
+          item.className = 'search-result-item';
+          item.onclick = () => jumpToMessage(chat.id, index);
+          
+          // 把關鍵字標上紅底紅字的高亮
+          const regex = new RegExp(`(${keyword})`, 'gi');
+          let snippet = cleanContent;
+          // 如果句子太長，裁切一下只顯示關鍵字前後
+          if (snippet.length > 60) { 
+             const matchIndex = snippet.toLowerCase().indexOf(keyword);
+             const start = Math.max(0, matchIndex - 15);
+             snippet = (start > 0 ? '...' : '') + snippet.substring(start, start + 60) + '...';
+          }
+          const highlighted = snippet.replace(regex, '<span class="search-highlight">$1</span>');
+
+          item.innerHTML = `
+            <div class="search-result-chat">📁 ${chat.title}</div>
+            <div class="search-result-msg">${msg.sender === 'user' ? '我' : '夏準'}: ${highlighted}</div>
+          `;
+          resultsContainer.appendChild(item);
+        }
+      });
+    });
+
+    if (resultsCount === 0) {
+      resultsContainer.innerHTML = '<div style="color:#aaa; font-size:13px;">找不到包含此關鍵字的對話...</div>';
+    }
+  }
+
+  // 點擊後跳轉並發光
+  function jumpToMessage(chatId, msgIndex) {
+    closeAllModals();
+    
+    // 如果點擊的是別的聊天室，先切換過去
+    if (currentChatId !== chatId) {
+      cancelMultiSelect();
+      loadChat(chatId);
+    }
+    
+    // 稍微等 150 毫秒，確保畫面已經渲染好，然後滑動
+    setTimeout(() => {
+      const msgContainer = document.getElementById('messages');
+      const wrappers = msgContainer.querySelectorAll('.msg-wrapper');
+      
+      if (wrappers[msgIndex]) {
+        // 平滑滾動到正中間
+        wrappers[msgIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 抓出那句話的方塊，加上金色閃爍魔法
+        const msgDiv = wrappers[msgIndex].querySelector('.msg');
+        const origBg = msgDiv.style.background;
+        const origTransition = msgDiv.style.transition;
+        
+        msgDiv.style.transition = 'background 0.3s';
+        msgDiv.style.background = '#ffd700'; // 閃爍成金色
+        
+        // 1.5 秒後恢復原狀
+        setTimeout(() => {
+          msgDiv.style.background = origBg;
+          setTimeout(() => msgDiv.style.transition = origTransition, 300);
+        }, 1500); 
+      }
+    }, 150); 
   }
 
   window.addEventListener('DOMContentLoaded', init);
