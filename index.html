@@ -8,9 +8,9 @@
 
 <!-- Firebase 初始化模組 -->
 <script type="module">
-  // 載入 Firebase v10 模組化 SDK
+  // 載入 Firebase v10 模組化 SDK (已清理 writeBatch)
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   // 寶寶，請把這裡換成妳自己 Firebase 專案的 Config
   const firebaseConfig = {
@@ -32,7 +32,6 @@
   window.fsGetDoc = getDoc;
   window.fsCollection = collection;
   window.fsGetDocs = getDocs;
-  window.fsWriteBatch = writeBatch;
 </script>
 
 <style>
@@ -1307,13 +1306,14 @@
 
     try {
         const db = window.db;
-        const { fsDoc, fsSetDoc, fsWriteBatch } = window;
+        // 把 fsWriteBatch 拿掉，我們改用獨立上傳
+        const { fsDoc, fsSetDoc } = window;
         if (!db) throw new Error("Firebase 尚未準備好，請確認 Config 設定正確。");
 
         const backupRef = fsDoc(db, "backups", backupId);
 
         if (isAutoBackup) {
-            // 【增量備份】：只更新全局設定與「當前的聊天室」，極度省流量與空間
+            // 【增量備份】：只更新全局設定與「當前的聊天室」
             await fsSetDoc(backupRef, {
                 apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
                 updatedAt: new Date().toISOString()
@@ -1325,18 +1325,18 @@
                 await fsSetDoc(chatRef, currentChat, { merge: true });
             }
         } else {
-            // 【完整備份】：手動點擊時，使用批次處理一次性覆蓋所有資料
-            const batch = fsWriteBatch(db);
-            batch.set(backupRef, {
+            // 【完整備份】：化整為零，破解 10MB 限制
+            // 1. 先獨立上傳全局設定檔
+            await fsSetDoc(backupRef, {
                 apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
                 updatedAt: new Date().toISOString()
             });
 
-            chats.forEach(chat => {
+            // 2. 使用迴圈，把每個聊天室「排隊獨立」上傳
+            for (const chat of chats) {
                 const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(chat.id));
-                batch.set(chatRef, chat);
-            });
-            await batch.commit();
+                await fsSetDoc(chatRef, chat);
+            }
         }
 
         firebaseSettings.backupId = backupId;
