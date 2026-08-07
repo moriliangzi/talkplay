@@ -25,7 +25,10 @@
 
   const app = initializeApp(firebaseConfig);
 window.db = getFirestore(app);
-enableNetwork(window.db);
+
+enableNetwork(window.db)
+  .then(() => console.log("Firestore 網路已開啟"))
+  .catch((e) => console.log("Firestore 網路開啟失敗", e));
 
 console.log("Firebase Firestore 已連線");
 
@@ -1390,7 +1393,8 @@ console.log("Firebase Firestore 已連線");
     try {
         const db = window.db;
         const { fsDoc, fsGetDoc, fsCollection, fsGetDocs } = window;
-        
+      
+        console.log("目前 Firestore:", db);
         // 1. 抓取全局設定
         const backupRef = fsDoc(db, "backups", backupId);
         const backupSnap = await fsGetDoc(backupRef);
