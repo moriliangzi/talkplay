@@ -24,10 +24,7 @@ import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch } fr
 
   const app = initializeApp(firebaseConfig);
 
-window.db = getFirestore(app, {
-  experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: false
-});
+window.db = getFirestore(app);
 
 console.log("Firebase Firestore 已連線");
 
