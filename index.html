@@ -10,7 +10,7 @@
 <script type="module">
   // 載入 Firebase v10 模組化 SDK (已清理 writeBatch)
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch, enableNetwork } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   // 寶寶，請把這裡換成妳自己 Firebase 專案的 Config
   const firebaseConfig = {
@@ -24,11 +24,10 @@
 };
 
   const app = initializeApp(firebaseConfig);
-window.db = getFirestore(app);
 
-enableNetwork(window.db)
-  .then(() => console.log("Firestore 網路已開啟"))
-  .catch((e) => console.log("Firestore 網路開啟失敗", e));
+window.db = getFirestore(app, {
+  experimentalForceLongPolling: true
+});
 
 console.log("Firebase Firestore 已連線");
 
