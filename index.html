@@ -1294,7 +1294,10 @@
                 method: 'POST', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(bodyData)
             });
         }
-        if (!response.ok) throw new Error(`上傳失敗: ${response.status}`);
+        if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${response.status}\n${text}`);
+}
         const data = await response.json();
         gistSettings.gistId = data.id; document.getElementById('gist-id').value = data.id;
         saveGistSettingsLocally();
