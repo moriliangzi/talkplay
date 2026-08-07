@@ -26,7 +26,8 @@
   const app = initializeApp(firebaseConfig);
 
 window.db = getFirestore(app, {
-  experimentalForceLongPolling: true
+  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: false
 });
 
 console.log("Firebase Firestore 已連線");
