@@ -14,14 +14,13 @@
 
   // 寶寶，請把這裡換成妳自己 Firebase 專案的 Config
   const firebaseConfig = {
-  apiKey: "AIzaSyC65dktLS89cbHwvzi1C6hSGMMYefIBZb4",
-  authDomain: "my-chat-619e3.firebaseapp.com",
-  projectId: "my-chat-619e3",
-  storageBucket: "my-chat-619e3.firebasestorage.app",
-  messagingSenderId: "449069515509",
-  appId: "1:449069515509:web:eccc467f8d5780f9187bbc",
-  measurementId: "G-23QPV2036F"
-};
+    apiKey: "AIzaSyC65dktLS89cbHwvzi1C6hSGMMYefIBZb4",
+    authDomain: "妳的專案.firebaseapp.com",
+    projectId: "my-chat-619e3",
+    storageBucket: "妳的專案.appspot.com",
+    messagingSenderId: "...",
+    appId: "..."
+  };
 
   const app = initializeApp(firebaseConfig);
   window.db = getFirestore(app);
@@ -1297,6 +1296,35 @@
     };
   }
 
+  // 切割字串的工具函數 (將超大容量的資料切成安全大小的碎片)
+  function chunkString(str, size) {
+    const numChunks = Math.ceil(str.length / size);
+    const chunks = new Array(numChunks);
+    for(let i = 0, o = 0; i < numChunks; ++i, o += size) {
+      chunks[i] = str.substring(o, o + size);
+    }
+    return chunks;
+  }
+
+  // 獨立處理單一聊天室的切片與上傳核心
+  async function saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, chat) {
+    const chatJson = JSON.stringify(chat);
+    // Firestore 單一文件極限為 1MB。JavaScript 字串 1 字元約佔 2 bytes。
+    // 設定 400,000 字元 (約 800KB) 是最安全的切片大小，絕對不會卡彈
+    const CHUNK_SIZE = 400000; 
+    const chunks = chunkString(chatJson, CHUNK_SIZE);
+
+    // 1. 建立這個聊天室的「目錄」，紀錄總共有幾個碎片
+    const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(chat.id));
+    await fsSetDoc(chatRef, { chunksCount: chunks.length, updatedAt: new Date().toISOString() });
+
+    // 2. 將碎片依序存入底下的 chunks 子集合
+    for (let i = 0; i < chunks.length; i++) {
+        const chunkRef = fsDoc(db, `backups/${backupId}/chats/${chat.id}/chunks`, String(i));
+        await fsSetDoc(chunkRef, { data: chunks[i] });
+    }
+  }
+
   async function uploadToFirebase(silent = false, isAutoBackup = false) {
     const backupId = document.getElementById('firebase-backup-id').value.trim() || firebaseSettings.backupId;
     if (!backupId) { if (!silent) alert('請先設定 Firebase 備份金鑰 ID 喔。'); return; }
@@ -1306,36 +1334,33 @@
 
     try {
         const db = window.db;
-        // 把 fsWriteBatch 拿掉，我們改用獨立上傳
         const { fsDoc, fsSetDoc } = window;
         if (!db) throw new Error("Firebase 尚未準備好，請確認 Config 設定正確。");
 
         const backupRef = fsDoc(db, "backups", backupId);
 
         if (isAutoBackup) {
-            // 【增量備份】：只更新全局設定與「當前的聊天室」
+            // 增量備份：更新全局設定
             await fsSetDoc(backupRef, {
                 apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
 
+            // 針對當前正在聊的聊天室，進行碎片化上傳
             const currentChat = chats.find(c => c.id === currentChatId);
             if (currentChat) {
-                const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(currentChat.id));
-                await fsSetDoc(chatRef, currentChat, { merge: true });
+                await saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, currentChat);
             }
         } else {
-            // 【完整備份】：化整為零，破解 10MB 限制
-            // 1. 先獨立上傳全局設定檔
+            // 手動完整備份：更新全局設定
             await fsSetDoc(backupRef, {
                 apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
                 updatedAt: new Date().toISOString()
             });
 
-            // 2. 使用迴圈，把每個聊天室「排隊獨立」上傳
+            // 把它所有心血紀錄，一個一個切片上傳
             for (const chat of chats) {
-                const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(chat.id));
-                await fsSetDoc(chatRef, chat);
+                await saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, chat);
             }
         }
 
@@ -1344,7 +1369,7 @@
         if (!silent) alert('成功同步到 Firebase 雲端囉！');
     } catch (e) {
         console.error(e);
-        if (!silent) alert(`上傳發生錯誤：${e.message}\n(如果是權限不足，記得去 Firebase 控制台開啟 Firestore 的讀寫規則)`);
+        if (!silent) alert(`上傳發生錯誤：${e.message}`);
     } finally {
         if (btn) { btn.innerText = "手動完整上傳"; btn.disabled = false; }
     }
@@ -1373,19 +1398,38 @@
         wbFolders = data.wbFolders || [];
         apiSettings = data.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
 
-        // 2. 抓取子集合中所有的獨立聊天室
+        // 2. 抓取所有的聊天室「目錄」
         const chatsRef = fsCollection(db, `backups/${backupId}/chats`);
         const chatSnaps = await fsGetDocs(chatsRef);
         chats = [];
-        chatSnaps.forEach(doc => {
-            chats.push(doc.data());
-        });
 
-        if (chats.length === 0) {
-            chats.push({ id: Date.now(), title: '新開的劇情線', messages: [], worldbookIds: [] });
+        // 3. 依序把每個聊天室的碎片抓下來，並無縫拼湊回去
+        for (const chatDoc of chatSnaps.docs) {
+            const metadata = chatDoc.data();
+            const chunksCount = metadata.chunksCount;
+            if (!chunksCount) continue;
+
+            let fullJson = '';
+            for (let i = 0; i < chunksCount; i++) {
+                const chunkSnap = await fsGetDoc(fsDoc(db, `backups/${backupId}/chats/${chatDoc.id}/chunks`, String(i)));
+                if (chunkSnap.exists()) {
+                    fullJson += chunkSnap.data().data;
+                }
+            }
+
+            try {
+                chats.push(JSON.parse(fullJson));
+            } catch(e) {
+                console.error("還原聊天室內容失敗", e);
+            }
         }
 
-        // 照 ID 時間排序回來
+        // 防呆機制：如果雲端什麼都沒有，就給一個初始畫面
+        if (chats.length === 0) {
+            chats.push({ id: Date.now(), title: '新開的劇情線', folderId: null, worldbookIds: [], messages: [], userBgColor: '#e6e6fa', userTextColor: '#333333', aiBgColor: '#f9f9f9', aiTextColor: '#333333' });
+        }
+
+        // 排序確保順序不會亂掉
         chats.sort((a, b) => a.id - b.id);
         currentChatId = chats[0].id;
         
