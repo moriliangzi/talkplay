@@ -5,6 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>專屬聊天室</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+
+<!-- Firebase 初始化模組 -->
+<script type="module">
+  // 載入 Firebase v10 模組化 SDK
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // 寶寶，請把這裡換成妳自己 Firebase 專案的 Config
+  const firebaseConfig = {
+  apiKey: "AIzaSyC65dktLS89cbHwvzi1C6hSGMMYefIBZb4",
+  authDomain: "my-chat-619e3.firebaseapp.com",
+  projectId: "my-chat-619e3",
+  storageBucket: "my-chat-619e3.firebasestorage.app",
+  messagingSenderId: "449069515509",
+  appId: "1:449069515509:web:eccc467f8d5780f9187bbc",
+  measurementId: "G-23QPV2036F"
+};
+
+  const app = initializeApp(firebaseConfig);
+  window.db = getFirestore(app);
+
+  // 將需要的函數暴露給全域環境
+  window.fsDoc = doc;
+  window.fsSetDoc = setDoc;
+  window.fsGetDoc = getDoc;
+  window.fsCollection = collection;
+  window.fsGetDocs = getDocs;
+  window.fsWriteBatch = writeBatch;
+</script>
+
 <style>
   body {
     font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
@@ -445,27 +475,23 @@
   </div>
 
   <div style="border-top: 1px solid #eee; padding-top: 15px;">
-    <label style="color:#333; font-weight:bold; font-size:14px; margin-bottom:10px; display:block;">☁️ GitHub Gist 雲端備份</label>
+    <label style="color:#333; font-weight:bold; font-size:14px; margin-bottom:10px; display:block;">🔥 Firebase 雲端備份</label>
     <div class="setting-item">
-        <label>GitHub Token (密鑰)</label>
-        <input type="password" id="gist-token" placeholder="ghp_xxxxxxxxxxxx">
-    </div>
-    <div class="setting-item">
-        <label>Gist ID (第一次留空，上傳後會自動填入)</label>
-        <input type="text" id="gist-id" placeholder="留空以建立新備份，或輸入現有 ID">
+        <label>雲端備份金鑰 ID (自己設定一串專屬英文或數字)</label>
+        <input type="text" id="firebase-backup-id" placeholder="例如：nana_secret_01">
     </div>
     
     <div class="setting-item" style="flex-direction:row; align-items:center;">
-        <input type="checkbox" id="auto-backup-gist" style="width:16px; height:16px; margin-right:8px; cursor:pointer;">
-        <label for="auto-backup-gist" style="margin:0; cursor:pointer;">開啟自動雲端備份</label>
+        <input type="checkbox" id="auto-backup-firebase" style="width:16px; height:16px; margin-right:8px; cursor:pointer;">
+        <label for="auto-backup-firebase" style="margin:0; cursor:pointer;">開啟單線自動增量備份</label>
     </div>
 
     <div style="display:flex; gap:10px;">
-        <button id="btn-gist-upload" onclick="uploadToGist(false)" style="flex:1; padding:10px; background:#d8bfd8; border:none; border-radius:8px; cursor:pointer; color:#fff; font-weight:bold;">上傳至雲端</button>
-        <button id="btn-gist-download" onclick="downloadFromGist()" style="flex:1; padding:10px; background:#f4f4f4; border:1px solid #ddd; border-radius:8px; cursor:pointer; color:#555; font-weight:bold;">從雲端下載還原</button>
+        <button id="btn-firebase-upload" onclick="uploadToFirebase(false)" style="flex:1; padding:10px; background:#d8bfd8; border:none; border-radius:8px; cursor:pointer; color:#fff; font-weight:bold;">手動完整上傳</button>
+        <button id="btn-firebase-download" onclick="downloadFromFirebase()" style="flex:1; padding:10px; background:#f4f4f4; border:1px solid #ddd; border-radius:8px; cursor:pointer; color:#555; font-weight:bold;">從雲端下載還原</button>
     </div>
   </div>
-  <button class="close-btn" onclick="saveGistSettingsAndClose()" style="margin-top:20px;">儲存並關閉</button>
+  <button class="close-btn" onclick="saveFirebaseSettingsAndClose()" style="margin-top:20px;">儲存並關閉</button>
 </div>
 
 <div class="modal" id="chat-settings-modal">
@@ -535,7 +561,7 @@
   let folders = [];
   let wbFolders = []; 
   let apiSettings = { url: '', key: '', model: 'gpt-3.5-turbo' };
-  let gistSettings = { token: '', gistId: '', autoBackup: false };
+  let firebaseSettings = { backupId: '', autoBackup: false };
   let currentChatId = null;
   
   // 多選模式變數
@@ -557,7 +583,7 @@
     folders = await localforage.getItem('myFolders') || [];
     wbFolders = await localforage.getItem('myWbFolders') || [];
     apiSettings = await localforage.getItem('myApiSettings') || { url: '', key: '', model: 'gpt-3.5-turbo' };
-    gistSettings = await localforage.getItem('myGistSettings') || { token: '', gistId: '', autoBackup: false };
+    firebaseSettings = await localforage.getItem('myFirebaseSettings') || { backupId: '', autoBackup: false };
 
     if (chats.length === 0) {
       chats.push({ 
@@ -589,9 +615,8 @@
     document.getElementById('api-url').value = apiSettings.url || '';
     document.getElementById('api-key').value = apiSettings.key || '';
     document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
-    document.getElementById('gist-token').value = gistSettings.token || '';
-    document.getElementById('gist-id').value = gistSettings.gistId || '';
-    document.getElementById('auto-backup-gist').checked = gistSettings.autoBackup || false;
+    document.getElementById('firebase-backup-id').value = firebaseSettings.backupId || '';
+    document.getElementById('auto-backup-firebase').checked = firebaseSettings.autoBackup || false;
 
     renderChatList();
     renderWorldbookList();
@@ -1273,107 +1298,134 @@
     };
   }
 
-  async function uploadToGist(silent = false) {
-    const token = document.getElementById('gist-token').value.trim();
-    let gistId = document.getElementById('gist-id').value.trim();
-    if (!token) { if (!silent) alert('請先輸入 GitHub Token 喔。'); return; }
+  async function uploadToFirebase(silent = false, isAutoBackup = false) {
+    const backupId = document.getElementById('firebase-backup-id').value.trim() || firebaseSettings.backupId;
+    if (!backupId) { if (!silent) alert('請先設定 Firebase 備份金鑰 ID 喔。'); return; }
 
-    const payload = JSON.stringify(getBackupPayload(), null, 2);
-    const bodyData = { description: "EPhone Roleplay Chat Backup", public: false, files: { "ephone_backup.json": { content: payload } } };
-    const btn = document.getElementById('btn-gist-upload');
+    const btn = document.getElementById('btn-firebase-upload');
     if (btn) { btn.innerText = "上傳中..."; btn.disabled = true; }
 
     try {
-        let response;
-        if (gistId) {
-            response = await fetch(`https://api.github.com/gists/${gistId}`, {
-                method: 'PATCH', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(bodyData)
-            });
+        const db = window.db;
+        const { fsDoc, fsSetDoc, fsWriteBatch } = window;
+        if (!db) throw new Error("Firebase 尚未準備好，請確認 Config 設定正確。");
+
+        const backupRef = fsDoc(db, "backups", backupId);
+
+        if (isAutoBackup) {
+            // 【增量備份】：只更新全局設定與「當前的聊天室」，極度省流量與空間
+            await fsSetDoc(backupRef, {
+                apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            const currentChat = chats.find(c => c.id === currentChatId);
+            if (currentChat) {
+                const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(currentChat.id));
+                await fsSetDoc(chatRef, currentChat, { merge: true });
+            }
         } else {
-            response = await fetch(`https://api.github.com/gists`, {
-                method: 'POST', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }, body: JSON.stringify(bodyData)
+            // 【完整備份】：手動點擊時，使用批次處理一次性覆蓋所有資料
+            const batch = fsWriteBatch(db);
+            batch.set(backupRef, {
+                apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
+                updatedAt: new Date().toISOString()
             });
+
+            chats.forEach(chat => {
+                const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(chat.id));
+                batch.set(chatRef, chat);
+            });
+            await batch.commit();
         }
-        if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`${response.status}\n${text}`);
-}
-        const data = await response.json();
-        gistSettings.gistId = data.id; document.getElementById('gist-id').value = data.id;
-        saveGistSettingsLocally();
-        if (!silent) alert('成功上傳到雲端囉！');
+
+        firebaseSettings.backupId = backupId;
+        saveFirebaseSettingsLocally();
+        if (!silent) alert('成功同步到 Firebase 雲端囉！');
     } catch (e) {
-        if (!silent) alert(`發生錯誤：${e.message}`);
+        console.error(e);
+        if (!silent) alert(`上傳發生錯誤：${e.message}\n(如果是權限不足，記得去 Firebase 控制台開啟 Firestore 的讀寫規則)`);
     } finally {
-        if (btn) { btn.innerText = "上傳至雲端"; btn.disabled = false; }
+        if (btn) { btn.innerText = "手動完整上傳"; btn.disabled = false; }
     }
   }
 
-  async function downloadFromGist() {
-    const token = document.getElementById('gist-token').value.trim();
-    const gistId = document.getElementById('gist-id').value.trim();
-    if (!token || !gistId) return alert('請確認 Token 和 Gist ID 都已經填寫喔。');
+  async function downloadFromFirebase() {
+    const backupId = document.getElementById('firebase-backup-id').value.trim();
+    if (!backupId) return alert('請確認備份金鑰 ID 已經填寫喔。');
     if (!confirm("確定要從雲端下載並覆蓋現在的所有進度嗎？")) return;
-    const btn = document.getElementById('btn-gist-download');
-    btn.innerText = "下載中..."; btn.disabled = true;
-    try {
-        const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-            method: 'GET', headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json' }
-        });
-        if (!response.ok) throw new Error(`讀取失敗: ${response.status}`);
-        const data = await response.json();
-        const fileObj = data.files['ephone_backup.json'] || Object.values(data.files)[0];
-        if (!fileObj) throw new Error('在雲端找不到備份檔案');
 
-        let fileContent = fileObj.content;
-        if (fileObj.truncated) {
-            const rawResponse = await fetch(fileObj.raw_url);
-            fileContent = await rawResponse.text();
+    const btn = document.getElementById('btn-firebase-download');
+    btn.innerText = "下載中..."; btn.disabled = true;
+
+    try {
+        const db = window.db;
+        const { fsDoc, fsGetDoc, fsCollection, fsGetDocs } = window;
+        
+        // 1. 抓取全局設定
+        const backupRef = fsDoc(db, "backups", backupId);
+        const backupSnap = await fsGetDoc(backupRef);
+        if (!backupSnap.exists()) throw new Error('在雲端找不到這個 ID 的備份資料');
+        
+        const data = backupSnap.data();
+        worldbooks = data.worldbooks || [];
+        folders = data.folders || [];
+        wbFolders = data.wbFolders || [];
+        apiSettings = data.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
+
+        // 2. 抓取子集合中所有的獨立聊天室
+        const chatsRef = fsCollection(db, `backups/${backupId}/chats`);
+        const chatSnaps = await fsGetDocs(chatsRef);
+        chats = [];
+        chatSnaps.forEach(doc => {
+            chats.push(doc.data());
+        });
+
+        if (chats.length === 0) {
+            chats.push({ id: Date.now(), title: '新開的劇情線', messages: [], worldbookIds: [] });
         }
 
-        const importedData = JSON.parse(fileContent);
-        if (importedData.appName === "EPhone_Roleplay_Backup") {
-            chats = importedData.chats || [];
-            worldbooks = importedData.worldbooks || [];
-            folders = importedData.folders || [];
-            wbFolders = importedData.wbFolders || [];
-            apiSettings = importedData.apiSettings || { url: '', key: '', model: 'gpt-3.5-turbo' };
-            currentChatId = chats[0] ? chats[0].id : Date.now();
-            
-            await localforage.setItem('myChats', chats);
-            await localforage.setItem('myWorldbooks', worldbooks);
-            await localforage.setItem('myFolders', folders);
-            await localforage.setItem('myWbFolders', wbFolders);
-            await localforage.setItem('myApiSettings', apiSettings);
-            
-            document.getElementById('api-url').value = apiSettings.url || '';
-            document.getElementById('api-key').value = apiSettings.key || '';
-            document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
+        // 照 ID 時間排序回來
+        chats.sort((a, b) => a.id - b.id);
+        currentChatId = chats[0].id;
+        
+        await localforage.setItem('myChats', chats);
+        await localforage.setItem('myWorldbooks', worldbooks);
+        await localforage.setItem('myFolders', folders);
+        await localforage.setItem('myWbFolders', wbFolders);
+        await localforage.setItem('myApiSettings', apiSettings);
+        
+        document.getElementById('api-url').value = apiSettings.url || '';
+        document.getElementById('api-key').value = apiSettings.key || '';
+        document.getElementById('api-model').value = apiSettings.model || 'gpt-3.5-turbo';
 
-            renderChatList(); renderWorldbookList(); loadChat(currentChatId);
-            alert("雲端備份已經成功還原囉！"); closeAllModals();
-        } else { alert("雲端上的資料格式不太對喔。"); }
+        renderChatList(); renderWorldbookList(); loadChat(currentChatId);
+        alert("Firebase 雲端備份已經成功還原囉！"); closeAllModals();
     } catch (e) {
-        alert(`下載發生錯誤：${e.message}\n如果檔案太大，可能需要使用實體備份。`);
+        console.error(e);
+        alert(`下載發生錯誤：${e.message}`);
     } finally {
         btn.innerText = "從雲端下載還原"; btn.disabled = false;
     }
   }
 
-  function saveGistSettingsAndClose() {
-    gistSettings.token = document.getElementById('gist-token').value.trim();
-    gistSettings.gistId = document.getElementById('gist-id').value.trim();
-    gistSettings.autoBackup = document.getElementById('auto-backup-gist').checked;
-    saveGistSettingsLocally();
+  function saveFirebaseSettingsAndClose() {
+    firebaseSettings.backupId = document.getElementById('firebase-backup-id').value.trim();
+    firebaseSettings.autoBackup = document.getElementById('auto-backup-firebase').checked;
+    saveFirebaseSettingsLocally();
     closeAllModals();
   }
-  function saveGistSettingsLocally() { localforage.setItem('myGistSettings', gistSettings); }
+
+  function saveFirebaseSettingsLocally() { 
+    localforage.setItem('myFirebaseSettings', firebaseSettings); 
+  }
 
   let autoBackupTimer = null;
   function checkAutoBackup() {
-      if (gistSettings.autoBackup && gistSettings.token && gistSettings.gistId) {
+      if (firebaseSettings.autoBackup && firebaseSettings.backupId) {
           clearTimeout(autoBackupTimer);
-          autoBackupTimer = setTimeout(() => { uploadToGist(true); }, 3000); 
+          // 延遲 3 秒執行增量備份 (silent=true, isAutoBackup=true)
+          autoBackupTimer = setTimeout(() => { uploadToFirebase(true, true); }, 3000); 
       }
   }
 
@@ -1736,9 +1788,8 @@
         renderWbFolderManagerList();
     }
     if(modalId === 'backup-modal') {
-      document.getElementById('gist-token').value = gistSettings.token || '';
-      document.getElementById('gist-id').value = gistSettings.gistId || '';
-      document.getElementById('auto-backup-gist').checked = gistSettings.autoBackup || false;
+      document.getElementById('firebase-backup-id').value = firebaseSettings.backupId || '';
+      document.getElementById('auto-backup-firebase').checked = firebaseSettings.autoBackup || false;
     }
     if(modalId === 'search-modal') {
         document.getElementById('search-keyword').value = '';
@@ -1841,24 +1892,5 @@
 
   window.addEventListener('DOMContentLoaded', init);
 </script>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyC65dktLS89cbHwvzi1C6hSGMMYefIBZb4",
-    authDomain: "my-chat-619e3.firebaseapp.com",
-    projectId: "my-chat-619e3",
-    storageBucket: "my-chat-619e3.firebasestorage.app",
-    messagingSenderId: "449069515509",
-    appId: "1:449069515509:web:eccc467f8d5780f9187bbc",
-    measurementId: "G-23QPV2036F"
-  };
-
-  const app = initializeApp(firebaseConfig);
-
-  console.log("Firebase 已連線");
-</script>
-
 </body>
 </html>
