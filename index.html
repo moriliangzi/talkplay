@@ -23,7 +23,9 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  window.db = getFirestore(app);
+window.db = getFirestore(app);
+
+console.log("Firebase Firestore 已連線");
 
   // 將需要的函數暴露給全域環境
   window.fsDoc = doc;
