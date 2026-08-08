@@ -570,6 +570,15 @@ window.fsWriteBatch = writeBatch;
   let isMultiSelectMode = false;
   let selectedMsgIndices = new Set();
 
+  // 記憶最後一次上傳的碎片與全局設定內容
+  let localChunkCache = {}; 
+  let localMetadataCache = { 
+      apiSettings: '',
+      worldbooks: '',
+      folders: '',
+      wbFolders: ''
+  };
+
   async function init() {
     try {
       const oldChats = localStorage.getItem('myChats');
@@ -1310,61 +1319,145 @@ window.fsWriteBatch = writeBatch;
     return chunks;
   }
 
-  // 獨立處理單一聊天室的切片與上傳核心
-  async function saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, chat) {
+  // 獨立處理單一聊天室的切片與上傳核心 (加入無變化攔截機制)
+  async function saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, chat, isAutoBackup = false) {
     const chatJson = JSON.stringify(chat);
-    // Firestore 單一文件極限為 1MB。JavaScript 字串 1 字元約佔 2 bytes。
-    // 設定 400,000 字元 (約 800KB) 是最安全的切片大小，絕對不會卡彈
     const CHUNK_SIZE = 400000; 
-    const chunks = chunkString(chatJson, CHUNK_SIZE);
-
-    // 1. 建立這個聊天室的「目錄」，紀錄總共有幾個碎片
-    const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(chat.id));
-    await fsSetDoc(chatRef, { chunksCount: chunks.length, updatedAt: new Date().toISOString() });
-
-    // 2. 將碎片依序存入底下的 chunks 子集合
-    for (let i = 0; i < chunks.length; i++) {
-        const chunkRef = fsDoc(db, `backups/${backupId}/chats/${chat.id}/chunks`, String(i));
-        await fsSetDoc(chunkRef, { data: chunks[i] });
+    const numChunks = Math.ceil(chatJson.length / CHUNK_SIZE);
+    const chunks = new Array(numChunks);
+    
+    for(let i = 0, o = 0; i < numChunks; ++i, o += CHUNK_SIZE) {
+      chunks[i] = chatJson.substring(o, o + CHUNK_SIZE);
     }
+
+    if (!localChunkCache[chat.id]) localChunkCache[chat.id] = [];
+    const cachedChunks = localChunkCache[chat.id];
+
+    let hasChanges = false;
+
+    // 檢查總碎片數量是否改變
+    if (!isAutoBackup || chunks.length !== cachedChunks.length) {
+        hasChanges = true;
+    }
+
+    // 檢查每一個碎片的內容是否改變
+    for (let i = 0; i < chunks.length; i++) {
+        if (!isAutoBackup || chunks[i] !== cachedChunks[i]) {
+            hasChanges = true;
+            break; // 只要有一個不一樣，就判定有變化
+        }
+    }
+
+    // 【極致優化 1】：如果是自動備份，且聊天室完全沒變化，直接終止，連網路請求都不發
+    if (isAutoBackup && !hasChanges) return false; 
+
+    // 1. 更新「目錄」 metadata
+    if (!isAutoBackup || chunks.length !== cachedChunks.length) {
+        const chatRef = fsDoc(db, `backups/${backupId}/chats`, String(chat.id));
+        await fsSetDoc(chatRef, { chunksCount: chunks.length, updatedAt: new Date().toISOString() }, { merge: true });
+    }
+
+    // 2. 只上傳有變化的碎片
+    for (let i = 0; i < chunks.length; i++) {
+        if (!isAutoBackup || chunks[i] !== cachedChunks[i]) {
+            const chunkRef = fsDoc(db, `backups/${backupId}/chats/${chat.id}/chunks`, String(i));
+            await fsSetDoc(chunkRef, { data: chunks[i] });
+            cachedChunks[i] = chunks[i]; // 更新快取
+        }
+    }
+
+    if (cachedChunks.length > chunks.length) {
+        cachedChunks.length = chunks.length;
+    }
+
+    return true; // 回傳 true 代表確實有發送上傳請求
   }
 
+  // 雲端上傳控制器
   async function uploadToFirebase(silent = false, isAutoBackup = false) {
     const backupId = document.getElementById('firebase-backup-id').value.trim() || firebaseSettings.backupId;
     if (!backupId) { if (!silent) alert('請先設定 Firebase 備份金鑰 ID 喔。'); return; }
 
     const btn = document.getElementById('btn-firebase-upload');
-    if (btn) { btn.innerText = "上傳中..."; btn.disabled = true; }
+    if (btn && !isAutoBackup) { btn.innerText = "上傳中..."; btn.disabled = true; }
 
     try {
         const db = window.db;
         const { fsDoc, fsSetDoc } = window;
-        if (!db) throw new Error("Firebase 尚未準備好，請確認 Config 設定正確。");
+        if (!db) throw new Error("Firebase 尚未準備好，請確認連線。");
 
         const backupRef = fsDoc(db, "backups", backupId);
 
         if (isAutoBackup) {
-            // 增量備份：更新全局設定
-            await fsSetDoc(backupRef, {
-                apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
-                updatedAt: new Date().toISOString()
-            }, { merge: true });
+            // 1. 比對全局設定是否改變
+            const currentApiSettingsStr = JSON.stringify(apiSettings);
+            const currentWorldbooksStr = JSON.stringify(worldbooks);
+            const currentFoldersStr = JSON.stringify(folders);
+            const currentWbFoldersStr = JSON.stringify(wbFolders);
 
-            // 針對當前正在聊的聊天室，進行碎片化上傳
-            const currentChat = chats.find(c => c.id === currentChatId);
-            if (currentChat) {
-                await saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, currentChat);
+            let metadataPayload = {};
+            let metadataChanged = false;
+
+            // 只要有變化的設定，才放進打包箱 (payload)
+            if (currentApiSettingsStr !== localMetadataCache.apiSettings) {
+                metadataPayload.apiSettings = apiSettings;
+                localMetadataCache.apiSettings = currentApiSettingsStr;
+                metadataChanged = true;
             }
+            if (currentWorldbooksStr !== localMetadataCache.worldbooks) {
+                metadataPayload.worldbooks = worldbooks;
+                localMetadataCache.worldbooks = currentWorldbooksStr;
+                metadataChanged = true;
+            }
+            if (currentFoldersStr !== localMetadataCache.folders) {
+                metadataPayload.folders = folders;
+                localMetadataCache.folders = currentFoldersStr;
+                metadataChanged = true;
+            }
+            if (currentWbFoldersStr !== localMetadataCache.wbFolders) {
+                metadataPayload.wbFolders = wbFolders;
+                localMetadataCache.wbFolders = currentWbFoldersStr;
+                metadataChanged = true;
+            }
+
+            // 2. 比對聊天室是否改變
+            let chatChanged = false;
+            const currentChat = chats.find(c => c.id === currentChatId);
+            
+            if (currentChat) {
+                // saveChatToFirestore 內部會做精準比對，沒變會直接回傳 false
+                chatChanged = await saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, currentChat, true);
+            }
+
+            // 【極致優化 2：超級省流開關】：設定檔沒變，聊天室也沒變，直接安靜結束這回合！
+            if (!metadataChanged && !chatChanged) {
+                return; // 不印 log、不發請求，完全隱形
+            }
+
+            // 3. 有改變才上傳有變動的設定檔
+            if (metadataChanged) {
+                metadataPayload.updatedAt = new Date().toISOString();
+                await fsSetDoc(backupRef, metadataPayload, { merge: true });
+            }
+
         } else {
-            // 手動完整備份：更新全局設定
+            // 【手動完整備份】：清空所有快取，強制全部重新上傳一次，確保萬無一失
+            localChunkCache = {};
+            localMetadataCache = { apiSettings: '', worldbooks: '', folders: '', wbFolders: '' };
+            
             await fsSetDoc(backupRef, {
                 apiSettings: apiSettings, worldbooks: worldbooks, folders: folders, wbFolders: wbFolders,
                 updatedAt: new Date().toISOString()
             });
 
-            // 把它所有心血紀錄，一個一個切片上傳
+            // 更新手動上傳後的快取
+            localMetadataCache.apiSettings = JSON.stringify(apiSettings);
+            localMetadataCache.worldbooks = JSON.stringify(worldbooks);
+            localMetadataCache.folders = JSON.stringify(folders);
+            localMetadataCache.wbFolders = JSON.stringify(wbFolders);
+
             for (const chat of chats) {
-                await saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, chat);
+                await saveChatToFirestore(db, fsDoc, fsSetDoc, backupId, chat, false);
             }
         }
 
@@ -1375,7 +1468,7 @@ window.fsWriteBatch = writeBatch;
         console.error(e);
         if (!silent) alert(`上傳發生錯誤：${e.message}`);
     } finally {
-        if (btn) { btn.innerText = "手動完整上傳"; btn.disabled = false; }
+        if (btn && !isAutoBackup) { btn.innerText = "手動完整上傳"; btn.disabled = false; }
     }
   }
 
